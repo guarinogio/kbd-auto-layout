@@ -73,3 +73,7 @@ def main() -> None:
     args = parser.parse_args()
     setup_logging(args.verbose)
     run_loop()
+
+
+if __name__ == "__main__":
+    main()

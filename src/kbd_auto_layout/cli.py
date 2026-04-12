@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import signal
 import subprocess
 import sys
 
@@ -285,3 +284,7 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
     raise SystemExit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()
