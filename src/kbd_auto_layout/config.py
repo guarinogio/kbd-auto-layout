@@ -15,6 +15,21 @@ def ensure_user_config_dir() -> Path:
     return USER_CONFIG.parent
 
 
+def default_general_config() -> GeneralConfig:
+    return GeneralConfig()
+
+
+def default_config_parser() -> configparser.ConfigParser:
+    parser = configparser.ConfigParser()
+    general = default_general_config()
+    parser["general"] = {
+        "default_layout": general.default_layout,
+        "default_variant": general.default_variant,
+        "poll_interval": str(general.poll_interval),
+    }
+    return parser
+
+
 def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
     parser = configparser.ConfigParser()
     files_read = parser.read([str(SYSTEM_CONFIG), str(USER_CONFIG)])
@@ -27,7 +42,7 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
 
     rules: list[DeviceRule] = []
     for section in parser.sections():
-        if not section.startswith('device "'):
+        if not section.startswith('device "') or not section.endswith('"'):
             continue
         device_name = section[len('device "') : -1]
         rules.append(
@@ -64,3 +79,16 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
         parser.write(fh)
 
     return USER_CONFIG
+
+
+def init_user_config(force: bool = False) -> tuple[Path, bool]:
+    ensure_user_config_dir()
+
+    if USER_CONFIG.exists() and not force:
+        return USER_CONFIG, False
+
+    parser = default_config_parser()
+    with USER_CONFIG.open("w", encoding="utf-8") as fh:
+        parser.write(fh)
+
+    return USER_CONFIG, True

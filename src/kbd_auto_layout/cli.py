@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 from kbd_auto_layout import __version__
-from kbd_auto_layout.config import USER_CONFIG, load_config, save_user_config
+from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, save_user_config
 from kbd_auto_layout.models import DeviceRule
 from kbd_auto_layout.xinput import is_device_connected, list_keyboard_names
 from kbd_auto_layout.xkb import (
@@ -19,12 +21,35 @@ from kbd_auto_layout.xkb import (
 )
 
 
+def _print_json(data: object) -> None:
+    print(json.dumps(data, indent=2, sort_keys=True))
+
+
+def _rule_to_dict(rule: DeviceRule) -> dict[str, object]:
+    return {
+        "name": rule.name,
+        "layout": rule.layout,
+        "variant": rule.variant,
+        "match": rule.match,
+        "connected": is_device_connected(rule.name),
+    }
+
+
 def cmd_list(args: argparse.Namespace) -> int:
+    devices = []
     for name in list_keyboard_names():
-        if args.connected and not is_device_connected(name):
+        connected = is_device_connected(name)
+        if args.connected and not connected:
             continue
-        status = "connected" if is_device_connected(name) else "disconnected"
-        print(f"{name}\t{status}")
+        devices.append({"name": name, "connected": connected})
+
+    if args.json:
+        _print_json(devices)
+        return 0
+
+    for device in devices:
+        status = "connected" if device["connected"] else "disconnected"
+        print(f"{device['name']}\t{status}")
     return 0
 
 
@@ -40,8 +65,25 @@ def cmd_variants(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_status(_args: argparse.Namespace) -> int:
+def cmd_status(args: argparse.Namespace) -> int:
     general, rules, files_read = load_config()
+    detected_keyboards = list_keyboard_names()
+
+    data = {
+        "config_files": [str(path) for path in files_read],
+        "general": {
+            "default_layout": general.default_layout,
+            "default_variant": general.default_variant,
+            "poll_interval": general.poll_interval,
+        },
+        "detected_keyboards": detected_keyboards,
+        "rules": [_rule_to_dict(rule) for rule in rules],
+        "current_xkb": current_layout_query().rstrip(),
+    }
+
+    if args.json:
+        _print_json(data)
+        return 0
 
     print("Config files:")
     if files_read:
@@ -56,7 +98,7 @@ def cmd_status(_args: argparse.Namespace) -> int:
     print(f"  poll_interval={general.poll_interval}")
 
     print("\nDetected keyboards:")
-    for name in list_keyboard_names():
+    for name in detected_keyboards:
         print(f"  - {name}")
 
     print("\nRules:")
@@ -150,6 +192,18 @@ def cmd_set_default(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_set_poll_interval(args: argparse.Namespace) -> int:
+    if args.seconds < 1:
+        print("poll interval must be >= 1", file=sys.stderr)
+        return 2
+
+    general, rules, _ = load_config()
+    general.poll_interval = args.seconds
+    path = save_user_config(general, rules)
+    print(f"Saved poll_interval={args.seconds} in {path}")
+    return 0
+
+
 def cmd_reload(_args: argparse.Namespace) -> int:
     result = subprocess.run(
         ["systemctl", "--user", "kill", "-s", "HUP", "kbd-auto-layout.service"],
@@ -168,6 +222,15 @@ def cmd_reload(_args: argparse.Namespace) -> int:
 def cmd_edit(_args: argparse.Namespace) -> int:
     USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(["code", str(USER_CONFIG)], check=False)
+    return 0
+
+
+def cmd_init_config(args: argparse.Namespace) -> int:
+    path, created = init_user_config(force=args.force)
+    if created:
+        print(f"Initialized config at {path}")
+    else:
+        print(f"Config already exists at {path}")
     return 0
 
 
@@ -233,6 +296,18 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_completion_zsh(_args: argparse.Namespace) -> int:
+    completion_path = (
+        Path(__file__).resolve().parents[2]
+        / "packaging"
+        / "completions"
+        / "zsh"
+        / "_kbd-auto-layoutctl"
+    )
+    print(completion_path.read_text(encoding="utf-8"), end="")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kbd-auto-layoutctl")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -241,6 +316,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_list = sub.add_parser("list", help="List detected keyboard devices")
     p_list.add_argument("--connected", action="store_true", help="Show only connected devices")
+    p_list.add_argument("--json", action="store_true", help="Output as JSON")
     p_list.set_defaults(func=cmd_list)
 
     p_layouts = sub.add_parser("layouts", help="List available X11 keyboard layouts")
@@ -251,6 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_variants.set_defaults(func=cmd_variants)
 
     p_status = sub.add_parser("status", help="Show config and current layout")
+    p_status.add_argument("--json", action="store_true", help="Output as JSON")
     p_status.set_defaults(func=cmd_status)
 
     p_assign = sub.add_parser("assign", help="Assign layout to a device")
@@ -268,14 +345,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_set_default.add_argument("variant", nargs="?", default="")
     p_set_default.set_defaults(func=cmd_set_default)
 
+    p_set_poll = sub.add_parser("set-poll-interval", help="Set polling interval in seconds")
+    p_set_poll.add_argument("seconds", type=int)
+    p_set_poll.set_defaults(func=cmd_set_poll_interval)
+
     p_reload = sub.add_parser("reload", help="Reload daemon config")
     p_reload.set_defaults(func=cmd_reload)
 
     p_edit = sub.add_parser("edit", help="Open user config in editor")
     p_edit.set_defaults(func=cmd_edit)
 
+    p_init = sub.add_parser("init-config", help="Create default user config")
+    p_init.add_argument("--force", action="store_true", help="Overwrite existing config")
+    p_init.set_defaults(func=cmd_init_config)
+
     p_doctor = sub.add_parser("doctor", help="Run environment checks")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_completion = sub.add_parser("completion-zsh", help="Print zsh completion script")
+    p_completion.set_defaults(func=cmd_completion_zsh)
 
     return parser
 

@@ -43,16 +43,20 @@ install-user:
 	chmod +x $(PREFIX)/bin/kbd-auto-layoutctl $(PREFIX)/bin/kbd-auto-layoutd
 	mkdir -p $(HOME)/.config/systemd/user
 	cp packaging/systemd/kbd-auto-layout.service $(HOME)/.config/systemd/user/kbd-auto-layout.service
+	mkdir -p $(PREFIX)/share/zsh/site-functions
+	cp packaging/completions/zsh/_kbd-auto-layoutctl $(PREFIX)/share/zsh/site-functions/_kbd-auto-layoutctl
 	systemctl --user daemon-reload || true
 	@echo "Installed to $(PREFIX)/bin"
+	@echo "Zsh completion installed to $(PREFIX)/share/zsh/site-functions"
 	@echo "Enable with: systemctl --user enable --now kbd-auto-layout.service"
 
 uninstall-user:
 	rm -f $(PREFIX)/bin/kbd-auto-layoutctl
 	rm -f $(PREFIX)/bin/kbd-auto-layoutd
 	rm -f $(HOME)/.config/systemd/user/kbd-auto-layout.service
+	rm -f $(PREFIX)/share/zsh/site-functions/_kbd-auto-layoutctl
 	systemctl --user daemon-reload || true
-	@echo "Uninstalled user-local binaries and service"
+	@echo "Uninstalled user-local binaries, completion, and service"
 
 clean:
 	rm -rf $(VENV) build dist *.egg-info .pytest_cache .ruff_cache
