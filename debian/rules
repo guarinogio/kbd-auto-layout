@@ -1,4 +1,9 @@
 #!/usr/bin/make -f
 
+export PYBUILD_TEST_ARGS = -m pytest -q
+
 %:
 	dh $@ --with python3 --buildsystem=pybuild
+
+override_dh_installsystemduser:
+	dh_installsystemduser --no-enable

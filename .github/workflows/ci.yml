@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m venv ~/.venvs/kbd-auto-layout
+          ~/.venvs/kbd-auto-layout/bin/pip install --upgrade pip
+          ~/.venvs/kbd-auto-layout/bin/pip install -e ".[dev]"
+      - name: Lint
+        run: ~/.venvs/kbd-auto-layout/bin/ruff check src tests
+      - name: Test
+        run: ~/.venvs/kbd-auto-layout/bin/pytest
+
+  debian-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packaging deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            devscripts debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-setuptools build-essential lintian
+      - name: Build package
+        run: debuild -us -uc
