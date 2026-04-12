@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build-release-publish:
     runs-on: ubuntu-latest
@@ -87,8 +90,6 @@ jobs:
           reprepro -b . includedeb stable "$GITHUB_WORKSPACE"/../kbd-auto-layout_*_all.deb
 
       - name: Commit and push APT repo
-        env:
-          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
         run: |
           cd /tmp/kbd-auto-layout-apt
           git config user.name "github-actions[bot]"
