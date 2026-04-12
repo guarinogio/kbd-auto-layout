@@ -12,9 +12,9 @@ Instead, contact the maintainer directly and include:
 
 - a clear description of the issue
 - steps to reproduce it
-- affected version(s)
-- any logs or screenshots that help explain the problem
-- whether you believe the issue has security impact on other users
+- affected version or versions
+- any relevant logs or screenshots
+- whether you believe the issue may affect other users
 
 Please allow reasonable time for investigation and remediation before public disclosure.
 

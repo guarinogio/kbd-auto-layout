@@ -7,45 +7,49 @@ Automatic keyboard layout switching for X11 based on connected keyboards.
 `kbd-auto-layout` is a lightweight daemon and CLI tool that automatically switches your keyboard layout depending on which keyboard is connected.
 
 It is designed for setups where you use:
-- a laptop keyboard (for example, Spanish)
-- an external keyboard (for example, English)
+- a laptop keyboard with one layout, such as Spanish
+- an external keyboard with another layout, such as English
 
 The daemon monitors connected input devices and applies the appropriate layout automatically.
 
 ## Features
 
 - Automatic layout switching based on connected keyboards
-- Per-device rules with `exact` and `contains` matching
+- Per-device rules with `exact` or `contains` matching
 - Default fallback layout
 - User-level systemd service
 - CLI for configuration and inspection
+- JSON output for inspection commands
 - Zsh completion
 - Debian package support
-- Manual pages for the CLI and daemon
+- Man pages
 
 ## Requirements
 
 - Linux with X11
 - `xinput`
 - `setxkbmap`
+- `localectl`
 - `systemd --user`
 
-## Install from a GitHub Release
-
-Download the latest `.deb` from the repository's Releases page, then install it with:
+## Install from GitHub Releases
 
 ```bash
-sudo apt install ./kbd-auto-layout_0.1.1_all.deb
-```
-
-Then enable the user service:
-
-```bash
+wget https://github.com/guarinogio/kbd-auto-layout/releases/download/v1.0.0/kbd-auto-layout_1.0.0_all.deb
+sudo apt install ./kbd-auto-layout_1.0.0_all.deb
 systemctl --user daemon-reload
 systemctl --user enable --now kbd-auto-layout.service
 ```
 
-## Usage
+## Install from a local `.deb`
+
+```bash
+sudo dpkg -i ./kbd-auto-layout_1.0.0_all.deb
+systemctl --user daemon-reload
+systemctl --user enable --now kbd-auto-layout.service
+```
+
+## Basic usage
 
 ### List detected keyboards
 
@@ -65,13 +69,13 @@ kbd-auto-layoutctl layouts
 kbd-auto-layoutctl variants es
 ```
 
-### Assign a layout to a keyboard
+### Assign a layout to a specific keyboard
 
 ```bash
 kbd-auto-layoutctl assign "Keychron K2 Max Keyboard" us
 ```
 
-### Assign using partial match
+### Assign a layout using substring matching
 
 ```bash
 kbd-auto-layoutctl assign "Keychron" us --match contains
@@ -83,7 +87,7 @@ kbd-auto-layoutctl assign "Keychron" us --match contains
 kbd-auto-layoutctl set-default es nodeadkeys
 ```
 
-### Reload configuration
+### Reload daemon configuration
 
 ```bash
 kbd-auto-layoutctl reload
@@ -157,24 +161,28 @@ journalctl --user -u kbd-auto-layout.service -f
 
 ## Troubleshooting
 
-Check environment:
+Check the environment:
 
 ```bash
 kbd-auto-layoutctl doctor
 ```
 
 Common issues:
-
 - Not running X11
 - Missing `xinput` or `setxkbmap`
-- User service not enabled
+- Service not enabled
+- A stale user unit overriding the packaged unit
+
+Check which unit is active:
+
+```bash
+systemctl --user status kbd-auto-layout.service --no-pager -l
+```
 
 ## Development
 
-Create a virtual environment outside the repository:
-
 ```bash
-python3 -m venv ~/.venvs/kbd-auto-layout
+python -m venv ~/.venvs/kbd-auto-layout
 source ~/.venvs/kbd-auto-layout/bin/activate
 pip install -e ".[dev]"
 ```
@@ -187,7 +195,7 @@ make lint
 make test
 ```
 
-Build Debian package:
+Build the Debian package:
 
 ```bash
 debuild -us -uc

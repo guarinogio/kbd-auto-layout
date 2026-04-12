@@ -1,5 +1,7 @@
 # Contributing
 
+Thanks for your interest in improving `kbd-auto-layout`.
+
 ## Setup
 
 ```bash
@@ -23,28 +25,41 @@ make test
 
 - Use `ruff` for linting and formatting
 - Keep functions small and testable
-- Prefer explicit behavior over magic
+- Prefer explicit behavior over hidden magic
+- Preserve CLI behavior unless there is a strong reason to change it
 
 ## Testing
 
-All changes must include tests when applicable.
+Add tests for behavior changes when applicable.
 
 ```bash
 pytest
 ```
 
+## Packaging
+
+When touching packaging, verify the Debian build:
+
+```bash
+debuild -us -uc
+```
+
 ## Commits
 
-Use conventional commits when possible:
+Conventional-style commit prefixes are preferred:
 
-- feat:
-- fix:
-- docs:
-- chore:
-- refactor:
+- `feat:`
+- `fix:`
+- `docs:`
+- `chore:`
+- `refactor:`
+- `test:`
+- `packaging:`
 
 ## Pull Requests
 
 - Keep PRs focused
-- Include description and context
-- Ensure CI passes
+- Explain what changed and why
+- Update docs when needed
+- Update tests when needed
+- Make sure CI passes

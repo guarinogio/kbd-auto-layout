@@ -15,4 +15,4 @@
 
 This is the first stable release of `kbd-auto-layout`.
 
-It is intended for X11 sessions and packaged for Debian/Ubuntu-style systems via `.deb`.
+It is intended for X11 sessions and packaged for Debian and Ubuntu style systems via a `.deb` package.

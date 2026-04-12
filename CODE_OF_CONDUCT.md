@@ -11,7 +11,7 @@ Examples of behavior that contribute to a positive environment include:
 - being respectful and professional
 - giving constructive feedback
 - assuming good intent
-- focusing on technical issues, not personal attacks
+- focusing on technical issues instead of personal attacks
 - being open to review and discussion
 
 ## Unacceptable Behavior
