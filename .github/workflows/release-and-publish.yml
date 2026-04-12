@@ -1,0 +1,92 @@
+name: Release and publish APT repo
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-release-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source repo
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            devscripts debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-setuptools python3-pytest \
+            build-essential lintian reprepro gnupg
+
+      - name: Build Debian package
+        run: |
+          debuild -us -uc
+          ls -l ../kbd-auto-layout_*_all.deb
+
+      - name: Create GitHub Release and upload .deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" ../kbd-auto-layout_*_all.deb \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes || \
+          gh release upload "$GITHUB_REF_NAME" ../kbd-auto-layout_*_all.deb --clobber
+
+      - name: Import GPG key
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
+          gpg --list-secret-keys --keyid-format=long
+
+      - name: Checkout APT repo
+        env:
+          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
+        run: |
+          git clone --branch gh-pages \
+            "https://x-access-token:${APT_REPO_TOKEN}@github.com/guarinogio/kbd-auto-layout-apt.git" \
+            /tmp/kbd-auto-layout-apt
+
+      - name: Publish package to APT repo
+        env:
+          APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+        run: |
+          export GNUPGHOME="${GNUPGHOME:-$HOME/.gnupg}"
+          cd /tmp/kbd-auto-layout-apt
+
+          mkdir -p conf
+          cat > conf/distributions <<DIST
+Origin: guarinogio
+Label: kbd-auto-layout
+Suite: stable
+Codename: stable
+Version: 1.0
+Architectures: amd64
+Components: main
+Description: APT repository for kbd-auto-layout
+SignWith: ${APT_GPG_KEY_ID}
+DIST
+
+          gpg --armor --export "${APT_GPG_KEY_ID}" > public.key
+          reprepro -b . includedeb stable "$GITHUB_WORKSPACE"/../kbd-auto-layout_*_all.deb
+
+      - name: Commit and push APT repo
+        env:
+          APT_REPO_TOKEN: ${{ secrets.APT_REPO_TOKEN }}
+        run: |
+          cd /tmp/kbd-auto-layout-apt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add .
+          if git diff --cached --quiet; then
+            echo "No APT repo changes to commit"
+            exit 0
+          fi
+
+          git commit -m "Publish ${GITHUB_REF_NAME}"
+          git push
