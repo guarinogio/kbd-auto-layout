@@ -17,9 +17,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            devscripts debhelper dh-python pybuild-plugin-pyproject \
-            python3-all python3-setuptools python3-pytest \
-            build-essential lintian reprepro gnupg
+            devscripts \
+            debhelper \
+            dh-python \
+            pybuild-plugin-pyproject \
+            python3-all \
+            python3-setuptools \
+            python3-pytest \
+            build-essential \
+            lintian \
+            reprepro \
+            gnupg
 
       - name: Build Debian package
         run: |
@@ -35,11 +43,16 @@ jobs:
             --generate-notes || \
           gh release upload "$GITHUB_REF_NAME" ../kbd-auto-layout_*_all.deb --clobber
 
+      - name: Prepare GNUPGHOME
+        run: |
+          echo "GNUPGHOME=$RUNNER_TEMP/gnupg" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/gnupg"
+          chmod 700 "$RUNNER_TEMP/gnupg"
+
       - name: Import GPG key
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
         run: |
-          export GNUPGHOME="$(mktemp -d)"
           echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
           gpg --list-secret-keys --keyid-format=long
 
@@ -55,21 +68,20 @@ jobs:
         env:
           APT_GPG_KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
         run: |
-          export GNUPGHOME="${GNUPGHOME:-$HOME/.gnupg}"
           cd /tmp/kbd-auto-layout-apt
-
           mkdir -p conf
-          cat > conf/distributions <<DIST
-Origin: guarinogio
-Label: kbd-auto-layout
-Suite: stable
-Codename: stable
-Version: 1.0
-Architectures: amd64
-Components: main
-Description: APT repository for kbd-auto-layout
-SignWith: ${APT_GPG_KEY_ID}
-DIST
+
+          cat > conf/distributions <<'DIST'
+          Origin: guarinogio
+          Label: kbd-auto-layout
+          Suite: stable
+          Codename: stable
+          Version: 1.0
+          Architectures: amd64
+          Components: main
+          Description: APT repository for kbd-auto-layout
+          SignWith: B815D1A3EFE1740E
+          DIST
 
           gpg --armor --export "${APT_GPG_KEY_ID}" > public.key
           reprepro -b . includedeb stable "$GITHUB_WORKSPACE"/../kbd-auto-layout_*_all.deb
