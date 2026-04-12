@@ -20,3 +20,10 @@ def test_parser_accepts_set_poll_interval():
     args = parser.parse_args(["set-poll-interval", "3"])
     assert args.command == "set-poll-interval"
     assert args.seconds == 3
+
+
+def test_parser_accepts_assign_match_contains():
+    parser = build_parser()
+    args = parser.parse_args(["assign", "Keychron", "us", "--match", "contains"])
+    assert args.command == "assign"
+    assert args.match == "contains"

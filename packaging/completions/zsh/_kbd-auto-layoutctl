@@ -18,6 +18,9 @@ _kbd_auto_layoutctl() {
     'completion-zsh:Print zsh completion script'
   )
 
+  local -a match_modes
+  match_modes=('exact:Exact name match' 'contains:Substring match')
+
   local curcontext="$curcontext" state line
 
   _arguments -C \
@@ -39,16 +42,19 @@ _kbd_auto_layoutctl() {
           _arguments '--json[Output as JSON]'
           ;;
         variants)
-          _arguments '1:layout:_files'
+          _arguments '1:layout:_message "layout"'
           ;;
         assign)
           _arguments \
             '1:device name:_message "device name"' \
             '2:layout:_message "layout"' \
-            '3:variant:_message "variant"'
+            '3:variant:_message "variant"' \
+            '--match[Match mode]:match mode:(exact contains)'
           ;;
         remove)
-          _arguments '1:device name:_message "device name"'
+          _arguments \
+            '1:device name:_message "device name"' \
+            '--match[Match mode]:match mode:(exact contains)'
           ;;
         set-default)
           _arguments \

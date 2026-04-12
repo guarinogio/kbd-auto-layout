@@ -1,5 +1,5 @@
 PYTHON ?= python3
-VENV ?= .venv
+VENV ?= $(HOME)/.venvs/kbd-auto-layout
 ACTIVATE = . $(VENV)/bin/activate
 PREFIX ?= $(HOME)/.local
 REPO_DIR := $(shell pwd)

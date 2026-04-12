@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: kbd-auto-layout
-Version: 0.1.0
+Version: 0.1.1
 Summary: Automatic keyboard layout switching for X11 based on connected keyboards
 Author: Gio Guarino
 License: MIT

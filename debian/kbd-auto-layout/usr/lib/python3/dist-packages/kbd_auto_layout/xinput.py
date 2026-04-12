@@ -65,3 +65,16 @@ def list_keyboard_names() -> list[str]:
 
 def is_device_connected(name: str) -> bool:
     return name in list_keyboard_names()
+
+
+def match_device_names(pattern: str, match_mode: str) -> list[str]:
+    names = list_keyboard_names()
+
+    if match_mode == "exact":
+        return [name for name in names if name == pattern]
+
+    if match_mode == "contains":
+        needle = pattern.lower()
+        return [name for name in names if needle in name.lower()]
+
+    raise ValueError(f"unsupported match mode: {match_mode}")

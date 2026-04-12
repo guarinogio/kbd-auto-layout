@@ -7,7 +7,7 @@ import time
 
 from kbd_auto_layout.config import load_config
 from kbd_auto_layout.logging_utils import setup_logging
-from kbd_auto_layout.xinput import is_device_connected
+from kbd_auto_layout.xinput import match_device_names
 from kbd_auto_layout.xkb import set_layout
 
 log = logging.getLogger("kbd_auto_layout.daemon")
@@ -23,14 +23,15 @@ def _handle_sighup(_signum, _frame) -> None:
 def find_active_rule():
     general, rules, _ = load_config()
     for rule in rules:
-        if is_device_connected(rule.name):
-            return general, rule
-    return general, None
+        matches = match_device_names(rule.name, rule.match)
+        if matches:
+            return general, rule, matches
+    return general, None, []
 
 
 def run_loop() -> None:
     global _reload_requested
-    last_state: tuple[str, str] | None = None
+    last_state: tuple[str, str, str, tuple[str, ...]] | None = None
 
     signal.signal(signal.SIGHUP, _handle_sighup)
 
@@ -40,16 +41,23 @@ def run_loop() -> None:
             _reload_requested = False
             last_state = None
 
-        general, rule = find_active_rule()
+        general, rule, matches = find_active_rule()
 
         if rule is not None:
-            state = (rule.layout, rule.variant)
+            state = (rule.layout, rule.variant, rule.match, tuple(matches))
             if state != last_state:
                 set_layout(rule.layout, rule.variant)
-                log.info("Applied device rule: %s -> %s %s", rule.name, rule.layout, rule.variant)
+                log.info(
+                    "Applied device rule: pattern=%s match=%s layout=%s variant=%s matched=%s",
+                    rule.name,
+                    rule.match,
+                    rule.layout,
+                    rule.variant,
+                    ",".join(matches),
+                )
                 last_state = state
         else:
-            state = (general.default_layout, general.default_variant)
+            state = (general.default_layout, general.default_variant, "default", ())
             if state != last_state:
                 set_layout(general.default_layout, general.default_variant)
                 log.info(

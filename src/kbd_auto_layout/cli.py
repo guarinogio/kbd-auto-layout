@@ -11,7 +11,7 @@ from pathlib import Path
 from kbd_auto_layout import __version__
 from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, save_user_config
 from kbd_auto_layout.models import DeviceRule
-from kbd_auto_layout.xinput import is_device_connected, list_keyboard_names
+from kbd_auto_layout.xinput import is_device_connected, list_keyboard_names, match_device_names
 from kbd_auto_layout.xkb import (
     current_layout_query,
     is_valid_layout,
@@ -20,18 +20,22 @@ from kbd_auto_layout.xkb import (
     list_variants,
 )
 
+MATCH_CHOICES = ("exact", "contains")
+
 
 def _print_json(data: object) -> None:
     print(json.dumps(data, indent=2, sort_keys=True))
 
 
 def _rule_to_dict(rule: DeviceRule) -> dict[str, object]:
+    matched_devices = match_device_names(rule.name, rule.match)
     return {
         "name": rule.name,
         "layout": rule.layout,
         "variant": rule.variant,
         "match": rule.match,
-        "connected": is_device_connected(rule.name),
+        "connected": bool(matched_devices),
+        "matched_devices": matched_devices,
     }
 
 
@@ -106,10 +110,13 @@ def cmd_status(args: argparse.Namespace) -> int:
         print("  (none)")
     else:
         for rule in rules:
-            connected = "yes" if is_device_connected(rule.name) else "no"
+            matched_devices = match_device_names(rule.name, rule.match)
+            connected = "yes" if matched_devices else "no"
+            matched_text = ", ".join(matched_devices) if matched_devices else "-"
             print(
                 f'  - name="{rule.name}" layout="{rule.layout}" '
-                f'variant="{rule.variant}" match="{rule.match}" connected="{connected}"'
+                f'variant="{rule.variant}" match="{rule.match}" '
+                f'connected="{connected}" matched_devices="{matched_text}"'
             )
 
     print("\nCurrent XKB:")
@@ -135,7 +142,7 @@ def cmd_assign(args: argparse.Namespace) -> int:
 
     updated = False
     for rule in rules:
-        if rule.name == args.device:
+        if rule.name == args.device and rule.match == args.match:
             rule.layout = args.layout
             rule.variant = args.variant or ""
             updated = True
@@ -147,7 +154,7 @@ def cmd_assign(args: argparse.Namespace) -> int:
                 name=args.device,
                 layout=args.layout,
                 variant=args.variant or "",
-                match="exact",
+                match=args.match,
             )
         )
 
@@ -158,7 +165,13 @@ def cmd_assign(args: argparse.Namespace) -> int:
 
 def cmd_remove(args: argparse.Namespace) -> int:
     general, rules, _ = load_config()
-    filtered = [rule for rule in rules if rule.name != args.device]
+
+    if args.match is None:
+        filtered = [rule for rule in rules if rule.name != args.device]
+    else:
+        filtered = [
+            rule for rule in rules if not (rule.name == args.device and rule.match == args.match)
+        ]
 
     if len(filtered) == len(rules):
         print("No matching rule found.", file=sys.stderr)
@@ -334,10 +347,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_assign.add_argument("device")
     p_assign.add_argument("layout")
     p_assign.add_argument("variant", nargs="?", default="")
+    p_assign.add_argument("--match", choices=MATCH_CHOICES, default="exact")
     p_assign.set_defaults(func=cmd_assign)
 
     p_remove = sub.add_parser("remove", help="Remove a device rule")
     p_remove.add_argument("device")
+    p_remove.add_argument("--match", choices=MATCH_CHOICES)
     p_remove.set_defaults(func=cmd_remove)
 
     p_set_default = sub.add_parser("set-default", help="Set fallback default layout")
