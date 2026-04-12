@@ -4,7 +4,7 @@
 	dh $@ --with python3 --buildsystem=pybuild
 
 override_dh_auto_test:
-	pytest -q
+	PYTHONPATH=src pytest -q
 
 override_dh_installsystemduser:
 	dh_installsystemduser --no-enable
