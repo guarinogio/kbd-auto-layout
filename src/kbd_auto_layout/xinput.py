@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import re
 import subprocess
+
+
+_KEYBOARD_LINE_RE = re.compile(r"^\s*↳?\s*(?P<name>.+?)\s+id=\d+\s+\[slave\s+keyboard")
 
 
 def list_device_names() -> list[str]:
@@ -14,26 +18,22 @@ def list_device_names() -> list[str]:
 
 
 def list_keyboard_names() -> list[str]:
-    ignored_prefixes = {
-        "Virtual core",
-    }
-    ignored_exact = {
-        "Video Bus",
-        "Power Button",
-        "Sleep Button",
-        "Ideapad extra buttons",
-        "Intel HID events",
-    }
+    result = subprocess.run(
+        ["xinput", "list", "--long"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
 
-    devices = list_device_names()
     keyboards: list[str] = []
-
-    for name in devices:
-        if any(name.startswith(prefix) for prefix in ignored_prefixes):
+    for line in result.stdout.splitlines():
+        match = _KEYBOARD_LINE_RE.search(line)
+        if not match:
             continue
-        if name in ignored_exact:
+        name = match.group("name").strip()
+        if name.startswith("Virtual core"):
             continue
-        if "Mouse" in name or "Touchpad" in name or "Trackball" in name:
+        if name.endswith("XTEST keyboard"):
             continue
         keyboards.append(name)
 
@@ -41,4 +41,4 @@ def list_keyboard_names() -> list[str]:
 
 
 def is_device_connected(name: str) -> bool:
-    return name in list_device_names()
+    return name in list_keyboard_names()

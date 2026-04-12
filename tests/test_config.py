@@ -5,6 +5,7 @@ def test_general_defaults():
     cfg = GeneralConfig()
     assert cfg.default_layout == "es"
     assert cfg.default_variant == "nodeadkeys"
+    assert cfg.poll_interval == 2
 
 
 def test_device_rule_defaults():

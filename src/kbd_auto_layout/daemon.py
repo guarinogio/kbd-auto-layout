@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import time
 
 from kbd_auto_layout.config import load_config
@@ -10,6 +11,13 @@ from kbd_auto_layout.xinput import is_device_connected
 from kbd_auto_layout.xkb import set_layout
 
 log = logging.getLogger("kbd_auto_layout.daemon")
+
+_reload_requested = False
+
+
+def _handle_sighup(_signum, _frame) -> None:
+    global _reload_requested
+    _reload_requested = True
 
 
 def find_active_rule():
@@ -21,9 +29,17 @@ def find_active_rule():
 
 
 def run_loop() -> None:
+    global _reload_requested
     last_state: tuple[str, str] | None = None
 
+    signal.signal(signal.SIGHUP, _handle_sighup)
+
     while True:
+        if _reload_requested:
+            log.info("Reloading configuration after SIGHUP")
+            _reload_requested = False
+            last_state = None
+
         general, rule = find_active_rule()
 
         if rule is not None:

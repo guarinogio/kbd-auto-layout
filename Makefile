@@ -1,8 +1,10 @@
 PYTHON ?= python3
 VENV ?= .venv
 ACTIVATE = . $(VENV)/bin/activate
+PREFIX ?= $(HOME)/.local
+REPO_DIR := $(shell pwd)
 
-.PHONY: venv install-dev format lint test run-cli run-daemon clean
+.PHONY: venv install-dev format lint test run-cli run-daemon clean install-user uninstall-user
 
 venv:
 	$(PYTHON) -m venv $(VENV)
@@ -21,10 +23,36 @@ test:
 	$(VENV)/bin/pytest
 
 run-cli:
-	$(VENV)/bin/kbd-auto-layoutctl --help
+	PYTHONPATH=$(REPO_DIR)/src $(PYTHON) -m kbd_auto_layout --help
 
 run-daemon:
-	$(VENV)/bin/kbd-auto-layoutd
+	PYTHONPATH=$(REPO_DIR)/src $(PYTHON) -m kbd_auto_layout.daemon
+
+install-user:
+	mkdir -p $(PREFIX)/bin
+	printf '%s\n' '#!/usr/bin/env bash' \
+	  'export PYTHONPATH="$(REPO_DIR)/src"' \
+	  'exec python3 -m kbd_auto_layout.cli "$$@"' \
+	  > $(PREFIX)/bin/kbd-auto-layoutctl
+	printf '%s\n' '#!/usr/bin/env bash' \
+	  'export PYTHONPATH="$(REPO_DIR)/src"' \
+	  'exec python3 -m kbd_auto_layout.daemon "$$@"' \
+	  > $(PREFIX)/bin/kbd-auto-layoutd
+	sed -i 's|$(REPO_DIR)|$(REPO_DIR)|g' $(PREFIX)/bin/kbd-auto-layoutctl
+	sed -i 's|$(REPO_DIR)|$(REPO_DIR)|g' $(PREFIX)/bin/kbd-auto-layoutd
+	chmod +x $(PREFIX)/bin/kbd-auto-layoutctl $(PREFIX)/bin/kbd-auto-layoutd
+	mkdir -p $(HOME)/.config/systemd/user
+	cp packaging/systemd/kbd-auto-layout.service $(HOME)/.config/systemd/user/kbd-auto-layout.service
+	systemctl --user daemon-reload || true
+	@echo "Installed to $(PREFIX)/bin"
+	@echo "Enable with: systemctl --user enable --now kbd-auto-layout.service"
+
+uninstall-user:
+	rm -f $(PREFIX)/bin/kbd-auto-layoutctl
+	rm -f $(PREFIX)/bin/kbd-auto-layoutd
+	rm -f $(HOME)/.config/systemd/user/kbd-auto-layout.service
+	systemctl --user daemon-reload || true
+	@echo "Uninstalled user-local binaries and service"
 
 clean:
 	rm -rf $(VENV) build dist *.egg-info .pytest_cache .ruff_cache

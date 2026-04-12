@@ -23,6 +23,16 @@ def list_variants(layout: str) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
+def is_valid_layout(layout: str) -> bool:
+    return layout in list_layouts()
+
+
+def is_valid_variant(layout: str, variant: str) -> bool:
+    if variant == "":
+        return True
+    return variant in list_variants(layout)
+
+
 def set_layout(layout: str, variant: str = "") -> None:
     cmd = ["setxkbmap", "-layout", layout]
     if variant:
