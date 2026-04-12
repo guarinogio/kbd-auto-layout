@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            devscripts debhelper dh-python pybuild-plugin-pyproject \
+            python3-all python3-setuptools build-essential lintian
+
+      - name: Build Debian package
+        run: debuild -us -uc
+
+      - name: Create GitHub Release and upload .deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" ../kbd-auto-layout_*_all.deb \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
