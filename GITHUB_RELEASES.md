@@ -25,7 +25,7 @@ wget https://github.com/guarinogio/kbd-auto-layout/releases/download/vx.y.z/kbd-
 For example:
 
 ```bash
-wget https://github.com/guarinogio/kbd-auto-layout/releases/download/v1.0.0/kbd-auto-layout_1.0.0_all.deb
+wget https://github.com/guarinogio/kbd-auto-layout/releases/download/v1.0.5/kbd-auto-layout_1.0.5_all.deb
 ```
 
 ## Install from a release asset

@@ -55,6 +55,7 @@ Conventional-style commit prefixes are preferred:
 - `refactor:`
 - `test:`
 - `packaging:`
+- `ci:`
 
 ## Pull Requests
 

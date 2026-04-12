@@ -53,3 +53,4 @@ gh release create vx.y.z ../kbd-auto-layout_*_all.deb --title "vx.y.z" --notes-f
 - [ ] Verify the GitHub Release asset downloads correctly
 - [ ] Verify install instructions from README
 - [ ] Verify the packaged service can be enabled by users
+- [ ] Verify the APT repository exposes the new version

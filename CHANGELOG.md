@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.5
+- Automated GitHub Release publishing
+- Automated APT repository publishing
+- End-to-end release pipeline working for `.deb` and APT distribution
+
 ## 1.0.0
 - First stable public release
 - Stable X11 keyboard layout auto-switching daemon
