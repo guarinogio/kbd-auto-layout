@@ -1,3 +1,0 @@
-[console_scripts]
-kbd-auto-layoutctl = kbd_auto_layout.cli:main
-kbd-auto-layoutd = kbd_auto_layout.daemon:main

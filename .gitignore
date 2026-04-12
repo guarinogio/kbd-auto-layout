@@ -11,3 +11,16 @@ build/
 .coverage
 htmlcov/
 .DS_Store
+
+# Debian build artifacts
+.debhelper/
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/kbd-auto-layout/
+debian/*.debhelper.log
+debian/*.substvars
+debian/*.buildinfo
+debian/*.changes
+debian/tmp/
+.pybuild/
