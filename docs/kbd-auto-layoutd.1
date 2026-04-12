@@ -1,0 +1,58 @@
+.TH KBD-AUTO-LAYOUTD 1 "April 2026" "kbd-auto-layout 0.1.1" "User Commands"
+.SH NAME
+kbd-auto-layoutd \- automatic keyboard layout switching daemon for X11
+.SH SYNOPSIS
+.B kbd-auto-layoutd
+.RI [ --verbose ]
+.SH DESCRIPTION
+.B kbd-auto-layoutd
+is the background daemon for
+.BR kbd-auto-layout .
+
+It monitors detected keyboard devices in an X11 session and applies the first matching
+configured rule. If no configured rule matches, it applies the configured default layout.
+
+The daemon is typically run as a user systemd service.
+.SH OPTIONS
+.TP
+.B --verbose
+Enable more verbose logging.
+.SH BEHAVIOR
+The daemon:
+.IP \(bu 2
+loads configuration from the system and user config files
+.IP \(bu 2
+checks detected keyboards periodically
+.IP \(bu 2
+applies the first matching rule in configuration order
+.IP \(bu 2
+falls back to the default layout if no rule matches
+.IP \(bu 2
+reloads configuration on SIGHUP
+.SH FILES
+.TP
+.I ~/.config/kbd-auto-layout/config.ini
+User configuration file.
+.TP
+.I /etc/kbd-auto-layout/config.ini
+System-wide configuration file.
+.TP
+.I /usr/lib/systemd/user/kbd-auto-layout.service
+Installed user systemd unit.
+.SH EXAMPLES
+.TP
+Run manually:
+.B kbd-auto-layoutd --verbose
+.TP
+Start as a user service:
+.B systemctl --user enable --now kbd-auto-layout.service
+.TP
+Reload configuration:
+.B systemctl --user kill -s HUP kbd-auto-layout.service
+.SH SEE ALSO
+.BR kbd-auto-layoutctl (1),
+.BR setxkbmap (1),
+.BR xinput (1),
+.BR systemctl (1)
+.SH AUTHOR
+Giovanni Guarino

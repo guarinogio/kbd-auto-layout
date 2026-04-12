@@ -20,4 +20,6 @@ de52e790cb39c8b7beb065c9e7940a43  usr/share/doc/kbd-auto-layout/README.md
 721caaaf231d728baa1a8c85c3f61a32  usr/share/doc/kbd-auto-layout/changelog.gz
 0dc33a7c375a623205df988fe090a4d8  usr/share/doc/kbd-auto-layout/copyright
 ae0b05b6775d2ac9b77b3bbeb464cf21  usr/share/doc/kbd-auto-layout/examples/config.ini
+2808f7b1cc87e960a8adba85de9e1ec3  usr/share/man/man1/kbd-auto-layoutctl.1.gz
+6b4393a60b20d1509c6d0f52838a4440  usr/share/man/man1/kbd-auto-layoutd.1.gz
 7f53be823728c361d6969516df3c849e  usr/share/zsh/vendor-completions/_kbd-auto-layoutctl

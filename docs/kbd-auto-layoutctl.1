@@ -1,0 +1,86 @@
+.TH KBD-AUTO-LAYOUTCTL 1 "April 2026" "kbd-auto-layout 0.1.1" "User Commands"
+.SH NAME
+kbd-auto-layoutctl \- manage automatic keyboard layout rules for X11
+.SH SYNOPSIS
+.B kbd-auto-layoutctl
+.RI [ --version ]
+.I command
+.RI [ options ]
+.SH DESCRIPTION
+.B kbd-auto-layoutctl
+is the command-line interface for configuring and inspecting
+kbd-auto-layout.
+
+It manages keyboard layout rules, default fallback settings, and daemon-related actions
+for X11 sessions.
+.SH COMMANDS
+.TP
+.B list
+List detected keyboard devices.
+.TP
+.B layouts
+List available X11 keyboard layouts.
+.TP
+.B variants \fIlayout\fR
+List variants for a given layout.
+.TP
+.B status
+Show config, detected keyboards, rules, and current XKB state.
+.TP
+.B assign \fIdevice layout\fR [\fIvariant\fR] [--match exact|contains]
+Assign a layout rule to a device pattern.
+.TP
+.B remove \fIdevice\fR [--match exact|contains]
+Remove a device rule.
+.TP
+.B set-default \fIlayout\fR [\fIvariant\fR]
+Set the fallback default layout.
+.TP
+.B set-poll-interval \fIseconds\fR
+Set the daemon polling interval in seconds.
+.TP
+.B reload
+Send SIGHUP to the user daemon to reload configuration.
+.TP
+.B edit
+Open the user configuration file in the configured editor.
+.TP
+.B init-config
+Create a default user configuration file.
+.TP
+.B doctor
+Run environment checks for X11 session, tools, and daemon status.
+.TP
+.B completion-zsh
+Print the zsh completion script.
+.SH FILES
+.TP
+.I ~/.config/kbd-auto-layout/config.ini
+User configuration file.
+.TP
+.I /etc/kbd-auto-layout/config.ini
+System-wide configuration file.
+.SH EXAMPLES
+.TP
+List keyboards:
+.B kbd-auto-layoutctl list
+.TP
+Assign English layout to a specific keyboard:
+.B kbd-auto-layoutctl assign "Keychron K2 Max Keyboard" us
+.TP
+Assign by substring match:
+.B kbd-auto-layoutctl assign "Keychron" us --match contains
+.TP
+Set default layout to Spanish:
+.B kbd-auto-layoutctl set-default es nodeadkeys
+.TP
+Reload daemon configuration:
+.B kbd-auto-layoutctl reload
+.SH SEE ALSO
+.BR kbd-auto-layoutd (1),
+.BR setxkbmap (1),
+.BR xinput (1),
+.BR localectl (1),
+.BR systemctl (1)
+.SH AUTHOR
+Giovanni Guarino
