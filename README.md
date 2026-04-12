@@ -1,5 +1,10 @@
 # kbd-auto-layout
 
+[![CI](https://github.com/guarinogio/kbd-auto-layout/actions/workflows/ci.yml/badge.svg)](https://github.com/guarinogio/kbd-auto-layout/actions/workflows/ci.yml)
+[![Latest Release](https://img.shields.io/github/v/release/guarinogio/kbd-auto-layout)](https://github.com/guarinogio/kbd-auto-layout/releases/latest)
+[![APT Repository](https://img.shields.io/badge/APT-stable-blue)](https://guarinogio.github.io/kbd-auto-layout-apt/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Automatic keyboard layout switching for X11 based on connected keyboards.
 
 ## Overview
@@ -14,7 +19,7 @@ The daemon monitors connected input devices and applies the appropriate layout a
 
 ## Features
 
-- Automatic layout switching based on connected keyboards
+- Automatic keyboard layout switching based on connected keyboards
 - Per-device rules with `exact` or `contains` matching
 - Default fallback layout
 - User-level systemd service
@@ -23,28 +28,29 @@ The daemon monitors connected input devices and applies the appropriate layout a
 - Zsh completion
 - Debian package support
 - Man pages
+- Public APT repository
 
-## Requirements
-
-- Linux with X11
-- `xinput`
-- `setxkbmap`
-- `localectl`
-- `systemd --user`
-
-## Install from GitHub Releases
+## Install from APT repository
 
 ```bash
-wget https://github.com/guarinogio/kbd-auto-layout/releases/download/v1.0.0/kbd-auto-layout_1.0.0_all.deb
-sudo apt install ./kbd-auto-layout_1.0.0_all.deb
+curl -fsSL https://guarinogio.github.io/kbd-auto-layout-apt/public.key \
+  | sudo gpg --dearmor --yes -o /usr/share/keyrings/kbd-auto-layout.gpg
+
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/kbd-auto-layout.gpg] https://guarinogio.github.io/kbd-auto-layout-apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/kbd-auto-layout.list
+
+sudo apt update
+sudo apt install kbd-auto-layout
+
 systemctl --user daemon-reload
 systemctl --user enable --now kbd-auto-layout.service
 ```
 
-## Install from a local `.deb`
+## Install from GitHub Releases
 
 ```bash
-sudo dpkg -i ./kbd-auto-layout_1.0.0_all.deb
+wget https://github.com/guarinogio/kbd-auto-layout/releases/download/v1.0.5/kbd-auto-layout_1.0.5_all.deb
+sudo apt install ./kbd-auto-layout_1.0.5_all.deb
 systemctl --user daemon-reload
 systemctl --user enable --now kbd-auto-layout.service
 ```
@@ -55,18 +61,6 @@ systemctl --user enable --now kbd-auto-layout.service
 
 ```bash
 kbd-auto-layoutctl list
-```
-
-### List available layouts
-
-```bash
-kbd-auto-layoutctl layouts
-```
-
-### List variants for a layout
-
-```bash
-kbd-auto-layoutctl variants es
 ```
 
 ### Assign a layout to a specific keyboard
@@ -126,57 +120,14 @@ variant =
 match = exact
 ```
 
-## How it works
-
-- The daemon polls connected input devices
-- It matches them against configured rules in order
-- The first matching rule is applied
-- If no rule matches, the default layout is used
-
-## Service management
-
-Start:
-
-```bash
-systemctl --user start kbd-auto-layout.service
-```
-
-Stop:
-
-```bash
-systemctl --user stop kbd-auto-layout.service
-```
-
-Restart:
-
-```bash
-systemctl --user restart kbd-auto-layout.service
-```
-
-Logs:
-
-```bash
-journalctl --user -u kbd-auto-layout.service -f
-```
-
 ## Troubleshooting
 
 Check the environment:
 
 ```bash
 kbd-auto-layoutctl doctor
-```
-
-Common issues:
-- Not running X11
-- Missing `xinput` or `setxkbmap`
-- Service not enabled
-- A stale user unit overriding the packaged unit
-
-Check which unit is active:
-
-```bash
 systemctl --user status kbd-auto-layout.service --no-pager -l
+journalctl --user -u kbd-auto-layout.service -f
 ```
 
 ## Development
@@ -185,19 +136,10 @@ systemctl --user status kbd-auto-layout.service --no-pager -l
 python -m venv ~/.venvs/kbd-auto-layout
 source ~/.venvs/kbd-auto-layout/bin/activate
 pip install -e ".[dev]"
-```
 
-Run checks:
-
-```bash
 make format
 make lint
 make test
-```
-
-Build the Debian package:
-
-```bash
 debuild -us -uc
 ```
 
