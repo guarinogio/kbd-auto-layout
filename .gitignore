@@ -28,3 +28,6 @@ debian/kbd-auto-layout/
 ../*.changes
 ../*.tar.xz
 ../*.tar.gz
+debian/*.postinst.debhelper
+debian/*.postrm.debhelper
+debian/*.prerm.debhelper
