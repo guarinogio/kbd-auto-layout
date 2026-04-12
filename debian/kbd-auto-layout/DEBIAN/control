@@ -1,0 +1,16 @@
+Package: kbd-auto-layout
+Version: 0.1.0
+Architecture: all
+Maintainer: Gio Guarino <gio@example.com>
+Installed-Size: 62
+Depends: init-system-helpers (>= 1.52), python3:any, python3, xinput, x11-xkb-utils, systemd
+Section: utils
+Priority: optional
+Homepage: https://github.com/guarinogio/kbd-auto-layout
+Description: Automatic keyboard layout switching for X11 based on connected keyboards
+ kbd-auto-layout provides:
+  - a background daemon to monitor connected keyboards
+  - a CLI to manage keyboard layout rules
+  - a user systemd service for automatic startup
+ .
+ It is intended for X11 sessions such as Xfce on Xubuntu.

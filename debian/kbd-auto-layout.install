@@ -1,0 +1,2 @@
+packaging/completions/zsh/_kbd-auto-layoutctl usr/share/zsh/vendor-completions/
+README.md usr/share/doc/kbd-auto-layout/
