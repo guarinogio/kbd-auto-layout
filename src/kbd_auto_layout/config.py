@@ -37,6 +37,8 @@ def default_config_parser() -> configparser.ConfigParser:
         "apply_retry_delay": str(general.apply_retry_delay),
         "backend": general.backend,
         "device_cache_ttl": str(general.device_cache_ttl),
+        "event_mode": general.event_mode,
+        "event_timeout": str(general.event_timeout),
     }
     return parser
 
@@ -54,6 +56,8 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
         general.apply_retry_delay = parser.getfloat("general", "apply_retry_delay", fallback=1.0)
         general.backend = parser.get("general", "backend", fallback="auto")
         general.device_cache_ttl = parser.getfloat("general", "device_cache_ttl", fallback=2.0)
+        general.event_mode = parser.get("general", "event_mode", fallback="auto")
+        general.event_timeout = parser.getfloat("general", "event_timeout", fallback=30.0)
 
     rules: list[DeviceRule] = []
     for section in parser.sections():
@@ -87,6 +91,8 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
         "apply_retry_delay": str(general.apply_retry_delay),
         "backend": general.backend,
         "device_cache_ttl": str(general.device_cache_ttl),
+        "event_mode": general.event_mode,
+        "event_timeout": str(general.event_timeout),
     }
 
     for rule in rules:

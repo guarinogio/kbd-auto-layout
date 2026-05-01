@@ -8,6 +8,7 @@ import time
 
 from kbd_auto_layout.backends import detect_backend
 from kbd_auto_layout.config import load_config
+from kbd_auto_layout.events import UdevInputMonitor
 from kbd_auto_layout.logging_utils import setup_logging
 from kbd_auto_layout.models import DeviceRule, GeneralConfig, KeyboardDevice
 from kbd_auto_layout.xinput import clear_device_cache, match_rule_devices
@@ -103,72 +104,117 @@ def _device_state(devices: list[KeyboardDevice]) -> tuple[str, ...]:
     return tuple(f"{device.name}:{device.hardware_id}" for device in devices)
 
 
+def _wait_for_next_check(general: GeneralConfig, monitor: UdevInputMonitor) -> None:
+    mode = (general.event_mode or "auto").lower()
+
+    if mode == "poll":
+        time.sleep(general.poll_interval)
+        clear_device_cache()
+        return
+
+    if mode not in {"auto", "udev"}:
+        log.warning("Unsupported event_mode=%s; falling back to polling", mode)
+        time.sleep(general.poll_interval)
+        clear_device_cache()
+        return
+
+    if not monitor.available:
+        if mode == "udev":
+            log.warning("event_mode=udev requested but udevadm is unavailable; polling instead")
+        time.sleep(general.poll_interval)
+        clear_device_cache()
+        return
+
+    event = monitor.wait(general.event_timeout)
+    if event:
+        log.info("Input event received from %s: %s", event.source, event.line)
+
+    # Timeout is intentional: it gives periodic reconciliation even without events.
+    clear_device_cache()
+
+
 def run_loop() -> None:
     global _reload_requested
     last_state: tuple[str, str, int, str, tuple[str, ...]] | None = None
+    monitor = UdevInputMonitor()
 
     signal.signal(signal.SIGHUP, _handle_sighup)
 
-    while True:
-        if _reload_requested:
-            log.info("Reloading configuration after SIGHUP")
-            _reload_requested = False
-            last_state = None
-            clear_device_cache()
+    try:
+        while True:
+            if _reload_requested:
+                log.info("Reloading configuration after SIGHUP")
+                _reload_requested = False
+                last_state = None
+                clear_device_cache()
 
-        general, rule, matches = find_active_rule()
-        backend = detect_backend(general.backend)
+            general, rule, matches = find_active_rule()
+            backend = detect_backend(general.backend)
 
-        if rule is not None:
-            state = (rule.layout, rule.variant, rule.priority, rule.match, _device_state(matches))
-            if state != last_state or not backend.layout_matches(rule.layout, rule.variant):
-                log.info(
-                    "Active rule selected: name=%s priority=%s match=%s vid=%s pid=%s matched=%s",
-                    rule.name,
+            if rule is not None:
+                state = (
+                    rule.layout,
+                    rule.variant,
                     rule.priority,
                     rule.match,
-                    rule.vendor_id,
-                    rule.product_id,
-                    _device_names(matches),
+                    _device_state(matches),
                 )
-                if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}", general):
+                if state != last_state or not backend.layout_matches(rule.layout, rule.variant):
                     log.info(
-                        "Applied device rule: pattern=%s priority=%s match=%s vid=%s pid=%s "
-                        "layout=%s variant=%s matched=%s",
+                        "Active rule selected: name=%s priority=%s match=%s vid=%s pid=%s "
+                        "matched=%s",
                         rule.name,
                         rule.priority,
                         rule.match,
                         rule.vendor_id,
                         rule.product_id,
-                        rule.layout,
-                        rule.variant,
                         _device_names(matches),
                     )
-                    last_state = state
-                else:
-                    last_state = None
-        else:
-            state = (general.default_layout, general.default_variant, 0, "default", ())
-            if state != last_state or not backend.layout_matches(
-                general.default_layout,
-                general.default_variant,
-            ):
-                if apply_layout_verified(
+                    if apply_layout_verified(
+                        rule.layout,
+                        rule.variant,
+                        f"rule {rule.name}",
+                        general,
+                    ):
+                        log.info(
+                            "Applied device rule: pattern=%s priority=%s match=%s vid=%s pid=%s "
+                            "layout=%s variant=%s matched=%s",
+                            rule.name,
+                            rule.priority,
+                            rule.match,
+                            rule.vendor_id,
+                            rule.product_id,
+                            rule.layout,
+                            rule.variant,
+                            _device_names(matches),
+                        )
+                        last_state = state
+                    else:
+                        last_state = None
+            else:
+                state = (general.default_layout, general.default_variant, 0, "default", ())
+                if state != last_state or not backend.layout_matches(
                     general.default_layout,
                     general.default_variant,
-                    "default layout",
-                    general,
                 ):
-                    log.info(
-                        "Applied default layout: %s %s",
+                    if apply_layout_verified(
                         general.default_layout,
                         general.default_variant,
-                    )
-                    last_state = state
-                else:
-                    last_state = None
+                        "default layout",
+                        general,
+                    ):
+                        log.info(
+                            "Applied default layout: %s %s",
+                            general.default_layout,
+                            general.default_variant,
+                        )
+                        last_state = state
+                    else:
+                        last_state = None
 
-        time.sleep(general.poll_interval)
+            _wait_for_next_check(general, monitor)
+    finally:
+        monitor.stop()
 
 
 def build_parser() -> argparse.ArgumentParser:

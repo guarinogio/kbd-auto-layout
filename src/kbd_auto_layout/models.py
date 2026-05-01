@@ -37,3 +37,5 @@ class GeneralConfig:
     apply_retry_delay: float = 1.0
     backend: str = "auto"
     device_cache_ttl: float = 2.0
+    event_mode: str = "auto"
+    event_timeout: float = 30.0

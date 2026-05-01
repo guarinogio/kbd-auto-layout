@@ -12,6 +12,7 @@ from pathlib import Path
 from kbd_auto_layout import __version__
 from kbd_auto_layout.backends import detect_backend
 from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, save_user_config
+from kbd_auto_layout.events import event_monitor_available
 from kbd_auto_layout.daemon import find_active_rule, sorted_rules
 from kbd_auto_layout.models import DeviceRule, KeyboardDevice
 from kbd_auto_layout.xinput import list_keyboard_devices, match_rule_devices
@@ -117,6 +118,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "apply_retry_delay": general.apply_retry_delay,
             "backend": general.backend,
             "device_cache_ttl": general.device_cache_ttl,
+            "event_mode": general.event_mode,
+            "event_timeout": general.event_timeout,
         },
         "backend": backend.name,
         "detected_keyboards": [_device_to_dict(device) for device in detected_keyboards],
@@ -143,6 +146,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"  apply_retry_delay={general.apply_retry_delay}")
     print(f"  backend={general.backend}")
     print(f"  device_cache_ttl={general.device_cache_ttl}")
+    print(f"  event_mode={general.event_mode}")
+    print(f"  event_timeout={general.event_timeout}")
 
     print(f"\nBackend: {backend.name}")
 
@@ -349,6 +354,26 @@ def cmd_set_device_cache_ttl(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_set_event_mode(args: argparse.Namespace) -> int:
+    general, rules, _ = load_config()
+    general.event_mode = args.mode
+    path = save_user_config(general, rules)
+    print(f"Saved event_mode={args.mode} in {path}")
+    return 0
+
+
+def cmd_set_event_timeout(args: argparse.Namespace) -> int:
+    if args.seconds < 1:
+        print("event timeout must be >= 1", file=sys.stderr)
+        return 2
+
+    general, rules, _ = load_config()
+    general.event_timeout = args.seconds
+    path = save_user_config(general, rules)
+    print(f"Saved event_timeout={args.seconds} in {path}")
+    return 0
+
+
 def cmd_reload(_args: argparse.Namespace) -> int:
     result = subprocess.run(
         ["systemctl", "--user", "kill", "-s", "HUP", "kbd-auto-layout.service"],
@@ -451,7 +476,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
                     "setxkbmap": shutil.which("setxkbmap"),
                     "localectl": shutil.which("localectl"),
                     "gsettings": shutil.which("gsettings"),
+                    "udevadm": shutil.which("udevadm"),
                 },
+                "event_monitor_available": event_monitor_available(),
             }
         )
         return 0 if backend_ok else 1
@@ -480,6 +507,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             "localectl available",
             shutil.which("localectl") is not None,
             shutil.which("localectl") or "",
+        )
+    )
+    checks.append(
+        (
+            "udevadm available",
+            event_monitor_available(),
+            shutil.which("udevadm") or "event-driven mode will fall back to polling",
         )
     )
 
@@ -584,6 +618,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_set_cache = sub.add_parser("set-device-cache-ttl", help="Set device cache TTL in seconds")
     p_set_cache.add_argument("seconds", type=float)
     p_set_cache.set_defaults(func=cmd_set_device_cache_ttl)
+
+    p_set_event_mode = sub.add_parser("set-event-mode", help="Set event monitoring mode")
+    p_set_event_mode.add_argument("mode", choices=("auto", "udev", "poll"))
+    p_set_event_mode.set_defaults(func=cmd_set_event_mode)
+
+    p_set_event_timeout = sub.add_parser("set-event-timeout", help="Set event wait timeout")
+    p_set_event_timeout.add_argument("seconds", type=float)
+    p_set_event_timeout.set_defaults(func=cmd_set_event_timeout)
 
     p_watch = sub.add_parser("watch", help="Watch detected devices and active rule")
     p_watch.add_argument("--interval", type=float, default=2.0)
