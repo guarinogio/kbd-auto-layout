@@ -8,14 +8,13 @@ import time
 
 from kbd_auto_layout.config import load_config
 from kbd_auto_layout.logging_utils import setup_logging
+from kbd_auto_layout.models import GeneralConfig
 from kbd_auto_layout.xinput import match_device_names
 from kbd_auto_layout.xkb import layout_matches, set_layout
 
 log = logging.getLogger("kbd_auto_layout.daemon")
 
 _reload_requested = False
-APPLY_RETRIES = 5
-APPLY_RETRY_DELAY_SECONDS = 1
 
 
 def _handle_sighup(_signum, _frame) -> None:
@@ -32,8 +31,16 @@ def find_active_rule():
     return general, None, []
 
 
-def apply_layout_verified(layout: str, variant: str, reason: str) -> bool:
-    for attempt in range(1, APPLY_RETRIES + 1):
+def apply_layout_verified(
+    layout: str,
+    variant: str,
+    reason: str,
+    general: GeneralConfig,
+) -> bool:
+    retries = max(1, general.apply_retries)
+    delay = max(0.0, general.apply_retry_delay)
+
+    for attempt in range(1, retries + 1):
         try:
             if layout_matches(layout, variant):
                 return True
@@ -50,19 +57,19 @@ def apply_layout_verified(layout: str, variant: str, reason: str) -> bool:
                 variant,
                 reason,
                 attempt,
-                APPLY_RETRIES,
+                retries,
                 exc,
             )
 
-        if attempt < APPLY_RETRIES:
-            time.sleep(APPLY_RETRY_DELAY_SECONDS)
+        if attempt < retries:
+            time.sleep(delay)
 
     log.warning(
         "Layout=%s variant=%s for %s was not active after %s attempts",
         layout,
         variant,
         reason,
-        APPLY_RETRIES,
+        retries,
     )
     return False
 
@@ -84,7 +91,7 @@ def run_loop() -> None:
         if rule is not None:
             state = (rule.layout, rule.variant, rule.match, tuple(matches))
             if state != last_state or not layout_matches(rule.layout, rule.variant):
-                if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}"):
+                if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}", general):
                     log.info(
                         "Applied device rule: pattern=%s match=%s layout=%s variant=%s matched=%s",
                         rule.name,
@@ -106,6 +113,7 @@ def run_loop() -> None:
                     general.default_layout,
                     general.default_variant,
                     "default layout",
+                    general,
                 ):
                     log.info(
                         "Applied default layout: %s %s",

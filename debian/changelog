@@ -1,3 +1,13 @@
+kbd-auto-layout (1.0.8) stable; urgency=medium
+
+  * Add configurable XKB apply retries and retry delay.
+  * Re-apply active layout when current XKB state diverges.
+  * Add rules command and support removing rules by index.
+  * Improve doctor output for Wayland sessions.
+  * Add regression tests for startup layout application.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 13:31:31 +0200
+
 kbd-auto-layout (1.0.7) stable; urgency=medium
 
   * Rebuild startup XKB apply fix with a fresh package version.

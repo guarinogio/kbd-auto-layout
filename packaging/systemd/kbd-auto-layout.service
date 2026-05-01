@@ -5,7 +5,6 @@ Wants=graphical-session.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sleep 3
 ExecStart=%h/.local/bin/kbd-auto-layoutd
 Restart=always
 RestartSec=2

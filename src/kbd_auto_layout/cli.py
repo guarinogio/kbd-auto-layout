@@ -79,6 +79,8 @@ def cmd_status(args: argparse.Namespace) -> int:
             "default_layout": general.default_layout,
             "default_variant": general.default_variant,
             "poll_interval": general.poll_interval,
+            "apply_retries": general.apply_retries,
+            "apply_retry_delay": general.apply_retry_delay,
         },
         "detected_keyboards": detected_keyboards,
         "rules": [_rule_to_dict(rule) for rule in rules],
@@ -100,6 +102,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"  default_layout={general.default_layout}")
     print(f"  default_variant={general.default_variant}")
     print(f"  poll_interval={general.poll_interval}")
+    print(f"  apply_retries={general.apply_retries}")
+    print(f"  apply_retry_delay={general.apply_retry_delay}")
 
     print("\nDetected keyboards:")
     for name in detected_keyboards:
@@ -121,6 +125,36 @@ def cmd_status(args: argparse.Namespace) -> int:
 
     print("\nCurrent XKB:")
     print(current_layout_query().rstrip())
+    return 0
+
+
+
+def cmd_rules(args: argparse.Namespace) -> int:
+    _general, rules, _files_read = load_config()
+
+    data = []
+    for index, rule in enumerate(rules, start=1):
+        item = _rule_to_dict(rule)
+        item["index"] = index
+        data.append(item)
+
+    if args.json:
+        _print_json(data)
+        return 0
+
+    if not rules:
+        print("(no rules)")
+        return 0
+
+    for item in data:
+        matched = ", ".join(item["matched_devices"]) if item["matched_devices"] else "-"
+        connected = "yes" if item["connected"] else "no"
+        print(
+            f'{item["index"]}. name="{item["name"]}" '
+            f'layout="{item["layout"]}" variant="{item["variant"]}" '
+            f'match="{item["match"]}" connected="{connected}" '
+            f'matched_devices="{matched}"'
+        )
     return 0
 
 
@@ -166,12 +200,26 @@ def cmd_assign(args: argparse.Namespace) -> int:
 def cmd_remove(args: argparse.Namespace) -> int:
     general, rules, _ = load_config()
 
-    if args.match is None:
-        filtered = [rule for rule in rules if rule.name != args.device]
+    index = getattr(args, "index", None)
+
+    if index is not None:
+        if index < 1 or index > len(rules):
+            print(f"No rule at index {index}.", file=sys.stderr)
+            return 1
+        filtered = [rule for idx, rule in enumerate(rules, start=1) if idx != index]
     else:
-        filtered = [
-            rule for rule in rules if not (rule.name == args.device and rule.match == args.match)
-        ]
+        if not args.device:
+            print("Provide a device name or --index.", file=sys.stderr)
+            return 2
+
+        if args.match is None:
+            filtered = [rule for rule in rules if rule.name != args.device]
+        else:
+            filtered = [
+                rule
+                for rule in rules
+                if not (rule.name == args.device and rule.match == args.match)
+            ]
 
     if len(filtered) == len(rules):
         print("No matching rule found.", file=sys.stderr)
@@ -250,11 +298,16 @@ def cmd_init_config(args: argparse.Namespace) -> int:
 def cmd_doctor(_args: argparse.Namespace) -> int:
     checks: list[tuple[str, bool, str]] = []
 
+    session_type = os.environ.get("XDG_SESSION_TYPE", "")
+    session_detail = session_type or "not set"
+    if session_type == "wayland":
+        session_detail = "wayland detected; kbd-auto-layout currently supports X11 only"
+
     checks.append(
         (
             "XDG_SESSION_TYPE is x11",
-            os.environ.get("XDG_SESSION_TYPE") == "x11",
-            os.environ.get("XDG_SESSION_TYPE", ""),
+            session_type == "x11",
+            session_detail,
         )
     )
     checks.append(
@@ -343,6 +396,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_status.add_argument("--json", action="store_true", help="Output as JSON")
     p_status.set_defaults(func=cmd_status)
 
+    p_rules = sub.add_parser("rules", help="List configured device rules")
+    p_rules.add_argument("--json", action="store_true", help="Output as JSON")
+    p_rules.set_defaults(func=cmd_rules)
+
     p_assign = sub.add_parser("assign", help="Assign layout to a device")
     p_assign.add_argument("device")
     p_assign.add_argument("layout")
@@ -351,8 +408,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_assign.set_defaults(func=cmd_assign)
 
     p_remove = sub.add_parser("remove", help="Remove a device rule")
-    p_remove.add_argument("device")
+    p_remove.add_argument("device", nargs="?")
     p_remove.add_argument("--match", choices=MATCH_CHOICES)
+    p_remove.add_argument("--index", type=int, help="Remove rule by index from `rules` output")
     p_remove.set_defaults(func=cmd_remove)
 
     p_set_default = sub.add_parser("set-default", help="Set fallback default layout")

@@ -26,6 +26,8 @@ def default_config_parser() -> configparser.ConfigParser:
         "default_layout": general.default_layout,
         "default_variant": general.default_variant,
         "poll_interval": str(general.poll_interval),
+        "apply_retries": str(general.apply_retries),
+        "apply_retry_delay": str(general.apply_retry_delay),
     }
     return parser
 
@@ -39,6 +41,8 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
         general.default_layout = parser.get("general", "default_layout", fallback="es")
         general.default_variant = parser.get("general", "default_variant", fallback="nodeadkeys")
         general.poll_interval = parser.getint("general", "poll_interval", fallback=2)
+        general.apply_retries = parser.getint("general", "apply_retries", fallback=5)
+        general.apply_retry_delay = parser.getfloat("general", "apply_retry_delay", fallback=1.0)
 
     rules: list[DeviceRule] = []
     for section in parser.sections():
@@ -65,6 +69,8 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
         "default_layout": general.default_layout,
         "default_variant": general.default_variant,
         "poll_interval": str(general.poll_interval),
+        "apply_retries": str(general.apply_retries),
+        "apply_retry_delay": str(general.apply_retry_delay),
     }
 
     for rule in rules:

@@ -54,3 +54,10 @@ gh release create vx.y.z ../kbd-auto-layout_*_all.deb --title "vx.y.z" --notes-f
 - [ ] Verify install instructions from README
 - [ ] Verify the packaged service can be enabled by users
 - [ ] Verify the APT repository exposes the new version
+
+
+## APT publishing safety
+
+- Never rebuild or republish the same package version with different contents.
+- Always bump `pyproject.toml`, `src/kbd_auto_layout/__init__.py`, and `debian/changelog` before publishing.
+- If a package version has already entered the APT repository, publish the next version instead of overwriting it.

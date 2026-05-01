@@ -34,8 +34,10 @@ def is_valid_variant(layout: str, variant: str) -> bool:
 
 
 def set_layout(layout: str, variant: str = "") -> None:
-    cmd = ["setxkbmap", "-layout", layout, "-variant", variant or "", "-option", ""]
-    subprocess.run(cmd, check=True)
+    subprocess.run(
+        ["setxkbmap", "-layout", layout, "-variant", variant or "", "-option", ""],
+        check=True,
+    )
 
 
 def current_layout_query() -> str:
