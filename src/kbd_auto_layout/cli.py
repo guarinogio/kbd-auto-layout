@@ -412,6 +412,85 @@ def _matching_devices_by_query(devices, query: str):
     return [device for device in devices if query in device.name.lower()]
 
 
+def _shell_quote(value: str) -> str:
+    return "'" + value.replace("'", "'\\''") + "'"
+
+
+def _suggest_rule_command(device, layout: str, variant: str = "", priority: int = 10) -> str:
+    args = [
+        "kbd-auto-layoutctl",
+        "use-current-keyboard",
+        layout,
+    ]
+    if variant:
+        args.append(variant)
+
+    args.extend(
+        [
+            "--device",
+            _shell_quote(device.name),
+            "--exact",
+            "--priority",
+            str(priority),
+        ]
+    )
+
+    if device.hardware_id:
+        args.append("--hardware")
+
+    return " ".join(args)
+
+
+def cmd_detect(args: argparse.Namespace) -> int:
+    clear_device_cache()
+    devices = list_keyboard_devices()
+
+    if not devices:
+        print("No keyboards detected.")
+        print()
+        print("Check:")
+        print("  kbd-auto-layoutctl doctor")
+        return 1
+
+    if args.json:
+        data = []
+        for device in devices:
+            data.append(
+                {
+                    "name": device.name,
+                    "vendor_id": device.vendor_id,
+                    "product_id": device.product_id,
+                    "hardware_id": device.hardware_id,
+                    "suggested_command": _suggest_rule_command(
+                        device,
+                        args.layout,
+                        args.variant,
+                        args.priority,
+                    ),
+                }
+            )
+        _print_json(data)
+        return 0
+
+    print("Detected keyboards:")
+    print()
+
+    for idx, device in enumerate(devices, start=1):
+        print(f"{idx}. {device.name}")
+        if device.hardware_id:
+            print(f"   hardware: {device.hardware_id}")
+        else:
+            print("   hardware: unavailable")
+        print("   suggested:")
+        print(f"     {_suggest_rule_command(device, args.layout, args.variant, args.priority)}")
+        print()
+
+    print("Tip:")
+    print("  Use the suggested command for the external keyboard you want to map.")
+    print("  Then run: kbd-auto-layoutctl reload")
+    return 0
+
+
 def cmd_use_current_keyboard(args: argparse.Namespace) -> int:
     clear_device_cache()
     devices = list_keyboard_devices()
@@ -537,69 +616,130 @@ def cmd_setup(args: argparse.Namespace) -> int:
 def cmd_explain(args: argparse.Namespace) -> int:
     general, rules, files = load_config()
     devices = list_keyboard_devices()
+    _general, active_rule, active_matches = find_active_rule()
 
-    print("Config files:")
-    for file in files:
-        print(f"  - {file}")
+    if args.json:
+        matched_rules = []
+        for rule in sorted_rules(rules):
+            matches = match_rule_devices(rule, general.device_cache_ttl)
+            matched_rules.append(
+                {
+                    "name": rule.name,
+                    "layout": rule.layout,
+                    "variant": rule.variant,
+                    "match": rule.match,
+                    "priority": rule.priority,
+                    "specificity": rule_specificity(rule),
+                    "vendor_id": rule.vendor_id,
+                    "product_id": rule.product_id,
+                    "matched_devices": [device.name for device in matches],
+                }
+            )
+
+        _print_json(
+            {
+                "config_files": [str(path) for path in files],
+                "default": {
+                    "layout": general.default_layout,
+                    "variant": general.default_variant,
+                    "backend": general.backend,
+                    "event_mode": general.event_mode,
+                },
+                "detected_keyboards": [
+                    {
+                        "name": device.name,
+                        "vendor_id": device.vendor_id,
+                        "product_id": device.product_id,
+                        "hardware_id": device.hardware_id,
+                    }
+                    for device in devices
+                ],
+                "active_rule": None
+                if active_rule is None
+                else {
+                    "name": active_rule.name,
+                    "layout": active_rule.layout,
+                    "variant": active_rule.variant,
+                    "match": active_rule.match,
+                    "priority": active_rule.priority,
+                    "specificity": rule_specificity(active_rule),
+                    "matched_devices": [device.name for device in active_matches],
+                },
+                "rules": matched_rules,
+            }
+        )
+        return 0
+
+    if active_rule:
+        layout_text = f"{active_rule.layout} {active_rule.variant}".strip()
+        print(f"Active: {active_rule.name} -> {layout_text}")
+        if active_rule.vendor_id or active_rule.product_id:
+            print(
+                f"Reason: hardware match {active_rule.vendor_id}:{active_rule.product_id} "
+                f"(priority={active_rule.priority})"
+            )
+        else:
+            print(
+                f"Reason: {active_rule.match} match "
+                f"(priority={active_rule.priority}, specificity={rule_specificity(active_rule)})"
+            )
+        print(f"Matched: {', '.join(device.name for device in active_matches)}")
+    else:
+        default_text = f"{general.default_layout} {general.default_variant}".strip()
+        print(f"Active: default -> {default_text}")
+        print("Reason: no configured rule matched.")
 
     print()
-    print("Default:")
-    print(f"  layout={general.default_layout}")
-    print(f"  variant={general.default_variant}")
-    print(f"  backend={general.backend}")
-    print(f"  event_mode={general.event_mode}")
+
+    if not rules:
+        print("No rules configured.")
+        print()
+        print("Use:")
+        print('  kbd-auto-layoutctl assign "My Keyboard" us')
+        print("or:")
+        print("  kbd-auto-layoutctl detect")
+        return 0
+
+    matched_rules = []
+    unmatched_rules = []
+    for rule in sorted_rules(rules):
+        matches = match_rule_devices(rule, general.device_cache_ttl)
+        if matches:
+            matched_rules.append((rule, matches))
+        else:
+            unmatched_rules.append(rule)
+
+    if len(matched_rules) > 1:
+        print(f"Warning: {len(matched_rules)} rules match. Using highest priority/specificity:")
+        for rule, matches in matched_rules:
+            marker = "*" if active_rule is rule else "-"
+            print(
+                f"  {marker} {rule.name} -> {rule.layout} "
+                f"(priority={rule.priority}, specificity={rule_specificity(rule)}, "
+                f"matched={len(matches)})"
+            )
+        print()
+
+    print("Rules:")
+    for idx, rule in enumerate(sorted_rules(rules), start=1):
+        matches = match_rule_devices(rule, general.device_cache_ttl)
+        status = "MATCH" if matches else "no match"
+        layout_text = f"{rule.layout} {rule.variant}".strip()
+        hardware = ""
+        if rule.vendor_id or rule.product_id:
+            hardware = f" hardware={rule.vendor_id}:{rule.product_id}"
+        print(
+            f"  {idx}. {rule.name} -> {layout_text} "
+            f"[{status}, priority={rule.priority}, specificity={rule_specificity(rule)}{hardware}]"
+        )
 
     print()
     print("Detected keyboards:")
     for device in devices:
-        print(f"  - {device.name}")
-        if device.hardware_id:
-            print(f"    hardware={device.hardware_id}")
+        hardware = f" ({device.hardware_id})" if device.hardware_id else ""
+        print(f"  - {device.name}{hardware}")
 
-    print()
-    print("Rule evaluation:")
-    if not rules:
-        print("  No rules configured. Default layout will be used.")
-        return 0
-
-    for idx, rule in enumerate(sorted_rules(rules), start=1):
-        matches = match_rule_devices(rule, general.device_cache_ttl)
-        print(f"  {idx}. {rule.name}")
-        print(
-            f"     priority={rule.priority} specificity={rule_specificity(rule)} "
-            f"match={rule.match} layout={rule.layout} variant={rule.variant}"
-        )
-        if rule.vendor_id or rule.product_id:
-            print(f"     hardware={rule.vendor_id}:{rule.product_id}")
-        if matches:
-            print(f"     result=MATCH ({', '.join(device.name for device in matches)})")
-        else:
-            print("     result=no match")
-
-    matched_rules = []
-    for rule in sorted_rules(rules):
-        matches_for_rule = match_rule_devices(rule, general.device_cache_ttl)
-        if matches_for_rule:
-            matched_rules.append(rule)
-
-    if len(matched_rules) > 1:
-        print()
-        print("Warning: multiple rules match. The first one wins:")
-        for rule in matched_rules:
-            print(
-                f"  - {rule.name} priority={rule.priority} "
-                f"specificity={rule_specificity(rule)} layout={rule.layout}"
-            )
-
-    _general, active_rule, matches = find_active_rule()
-    print()
-    if active_rule:
-        print(f'Active rule: "{active_rule.name}" -> {active_rule.layout} {active_rule.variant}'.strip())
-        print(f"Matched devices: {', '.join(device.name for device in matches)}")
-    else:
-        print(f"Active rule: default -> {general.default_layout} {general.default_variant}".strip())
     return 0
-
 
 def _run_systemctl_user(args: list[str]) -> int:
     result = subprocess.run(
@@ -616,10 +756,30 @@ def _run_systemctl_user(args: list[str]) -> int:
     return result.returncode
 
 
+def _systemctl_user_output(args: list[str]) -> tuple[int, str]:
+    result = subprocess.run(
+        ["systemctl", "--user", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    output = result.stdout.strip() or result.stderr.strip()
+    return result.returncode, output
+
+
 def cmd_enable(_args: argparse.Namespace) -> int:
     rc = _run_systemctl_user(["daemon-reload"])
     if rc != 0:
         return rc
+
+    _enabled_rc, enabled = _systemctl_user_output(["is-enabled", "kbd-auto-layout.service"])
+    _active_rc, active = _systemctl_user_output(["is-active", "kbd-auto-layout.service"])
+
+    if enabled == "enabled" and active == "active":
+        print("kbd-auto-layout.service already enabled and running.")
+        return 0
+
     rc = _run_systemctl_user(["enable", "--now", "kbd-auto-layout.service"])
     if rc == 0:
         print("kbd-auto-layout.service enabled and started.")
@@ -627,6 +787,13 @@ def cmd_enable(_args: argparse.Namespace) -> int:
 
 
 def cmd_disable(_args: argparse.Namespace) -> int:
+    _enabled_rc, enabled = _systemctl_user_output(["is-enabled", "kbd-auto-layout.service"])
+    _active_rc, active = _systemctl_user_output(["is-active", "kbd-auto-layout.service"])
+
+    if enabled != "enabled" and active != "active":
+        print("kbd-auto-layout.service already stopped and disabled.")
+        return 0
+
     rc = _run_systemctl_user(["disable", "--now", "kbd-auto-layout.service"])
     if rc == 0:
         print("kbd-auto-layout.service stopped and disabled.")
@@ -937,7 +1104,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_use_current.add_argument("--priority", type=int, default=10)
     p_use_current.set_defaults(func=cmd_use_current_keyboard)
 
+    p_detect = sub.add_parser("detect", help="Detect keyboards and suggest rules")
+    p_detect.add_argument("--layout", default="us", help="Layout to use in suggested commands")
+    p_detect.add_argument("--variant", default="", help="Variant to use in suggested commands")
+    p_detect.add_argument("--priority", type=int, default=10)
+    p_detect.add_argument("--json", action="store_true", help="Output as JSON")
+    p_detect.set_defaults(func=cmd_detect)
+
     p_explain = sub.add_parser("explain", help="Explain rule evaluation and active layout")
+    p_explain.add_argument("--json", action="store_true", help="Output as JSON")
     p_explain.set_defaults(func=cmd_explain)
 
     p_enable = sub.add_parser("enable", help="Enable and start the user service")
