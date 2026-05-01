@@ -19,6 +19,13 @@ def default_general_config() -> GeneralConfig:
     return GeneralConfig()
 
 
+def _normalize_hex(value: str) -> str:
+    value = (value or "").strip().lower()
+    if value.startswith("0x"):
+        value = value[2:]
+    return value.zfill(4) if value else ""
+
+
 def default_config_parser() -> configparser.ConfigParser:
     parser = configparser.ConfigParser()
     general = default_general_config()
@@ -29,15 +36,9 @@ def default_config_parser() -> configparser.ConfigParser:
         "apply_retries": str(general.apply_retries),
         "apply_retry_delay": str(general.apply_retry_delay),
         "backend": general.backend,
+        "device_cache_ttl": str(general.device_cache_ttl),
     }
     return parser
-
-
-def _normalize_hex(value: str) -> str:
-    value = (value or "").strip().lower()
-    if value.startswith("0x"):
-        value = value[2:]
-    return value.zfill(4) if value else ""
 
 
 def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
@@ -52,6 +53,7 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
         general.apply_retries = parser.getint("general", "apply_retries", fallback=5)
         general.apply_retry_delay = parser.getfloat("general", "apply_retry_delay", fallback=1.0)
         general.backend = parser.get("general", "backend", fallback="auto")
+        general.device_cache_ttl = parser.getfloat("general", "device_cache_ttl", fallback=2.0)
 
     rules: list[DeviceRule] = []
     for section in parser.sections():
@@ -66,6 +68,7 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
                 match=parser.get(section, "match", fallback="exact"),
                 vendor_id=_normalize_hex(parser.get(section, "vendor_id", fallback="")),
                 product_id=_normalize_hex(parser.get(section, "product_id", fallback="")),
+                priority=parser.getint(section, "priority", fallback=0),
             )
         )
 
@@ -83,6 +86,7 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
         "apply_retries": str(general.apply_retries),
         "apply_retry_delay": str(general.apply_retry_delay),
         "backend": general.backend,
+        "device_cache_ttl": str(general.device_cache_ttl),
     }
 
     for rule in rules:
@@ -91,6 +95,7 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
             "layout": rule.layout,
             "variant": rule.variant,
             "match": rule.match,
+            "priority": str(rule.priority),
         }
         if rule.vendor_id:
             parser[section]["vendor_id"] = rule.vendor_id

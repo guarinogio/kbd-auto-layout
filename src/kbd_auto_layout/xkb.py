@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import subprocess
 
-from kbd_auto_layout.backends import detect_backend, parse_setxkbmap_query
+from kbd_auto_layout.backends import (
+    SUBPROCESS_TIMEOUT_SECONDS,
+    detect_backend,
+    parse_setxkbmap_query,
+)
 
 
 def list_layouts() -> list[str]:
@@ -11,6 +15,7 @@ def list_layouts() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
@@ -21,6 +26,7 @@ def list_variants(layout: str) -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 

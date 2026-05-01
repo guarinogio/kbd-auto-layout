@@ -1,4 +1,9 @@
-from kbd_auto_layout.backends import parse_gnome_sources, parse_setxkbmap_query
+from kbd_auto_layout.backends import (
+    WaylandBackend,
+    detect_backend,
+    parse_gnome_sources,
+    parse_setxkbmap_query,
+)
 
 
 def test_parse_setxkbmap_query():
@@ -20,3 +25,9 @@ def test_parse_gnome_sources_variant():
 
 def test_parse_gnome_sources_prefixed():
     assert parse_gnome_sources("[('xkb', 'xkb:es+nodeadkeys')]") == ("es", "nodeadkeys")
+
+
+def test_detect_backend_generic_wayland(monkeypatch):
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("XDG_CURRENT_DESKTOP", "sway")
+    assert isinstance(detect_backend("auto"), WaylandBackend)

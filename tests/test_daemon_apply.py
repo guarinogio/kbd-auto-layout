@@ -6,11 +6,9 @@ class FakeBackend:
     name = "fake"
 
     def __init__(self):
-        self.matches_calls = 0
         self.set_calls = 0
 
     def layout_matches(self, layout, variant):
-        self.matches_calls += 1
         return self.set_calls >= 1
 
     def set_layout(self, layout, variant):

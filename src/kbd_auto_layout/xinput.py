@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 
+from kbd_auto_layout.backends import SUBPROCESS_TIMEOUT_SECONDS
 from kbd_auto_layout.models import DeviceRule, KeyboardDevice
 
 _KEYBOARD_LINE_RE = re.compile(
@@ -24,6 +26,9 @@ _EXCLUDED_SUBSTRINGS = (
     "System Control",
 )
 
+_CACHE_TS = 0.0
+_CACHE_DATA: list[KeyboardDevice] = []
+
 
 def _to_hex_id(value: str) -> str:
     return f"{int(value):04x}"
@@ -36,12 +41,19 @@ def _normalize_hex(value: str) -> str:
     return value.zfill(4) if value else ""
 
 
+def clear_device_cache() -> None:
+    global _CACHE_TS, _CACHE_DATA
+    _CACHE_TS = 0.0
+    _CACHE_DATA = []
+
+
 def list_device_names() -> list[str]:
     result = subprocess.run(
         ["xinput", "list", "--name-only"],
         capture_output=True,
         text=True,
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
@@ -64,6 +76,7 @@ def _device_product_ids(device_id: str) -> tuple[str, str]:
         capture_output=True,
         text=True,
         check=False,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
     if result.returncode != 0:
         return "", ""
@@ -81,6 +94,7 @@ def list_keyboard_devices() -> list[KeyboardDevice]:
         capture_output=True,
         text=True,
         check=True,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
     )
 
     found: dict[tuple[str, str, str], KeyboardDevice] = {}
@@ -105,8 +119,19 @@ def list_keyboard_devices() -> list[KeyboardDevice]:
     return sorted(found.values(), key=lambda device: (device.name, device.vendor_id, device.product_id))
 
 
+def list_keyboard_devices_cached(ttl: float = 2.0) -> list[KeyboardDevice]:
+    global _CACHE_TS, _CACHE_DATA
+    now = time.time()
+    if _CACHE_DATA and ttl > 0 and now - _CACHE_TS < ttl:
+        return list(_CACHE_DATA)
+
+    _CACHE_DATA = list_keyboard_devices()
+    _CACHE_TS = now
+    return list(_CACHE_DATA)
+
+
 def list_keyboard_names() -> list[str]:
-    return sorted({device.name for device in list_keyboard_devices()})
+    return sorted({device.name for device in list_keyboard_devices_cached()})
 
 
 def is_device_connected(name: str) -> bool:
@@ -126,16 +151,17 @@ def match_device_names(pattern: str, match_mode: str) -> list[str]:
     raise ValueError(f"unsupported match mode: {match_mode}")
 
 
-def match_rule_devices(rule: DeviceRule) -> list[KeyboardDevice]:
-    devices = list_keyboard_devices()
+def match_rule_devices(rule: DeviceRule, cache_ttl: float = 2.0) -> list[KeyboardDevice]:
+    devices = list_keyboard_devices_cached(cache_ttl)
 
-    if rule.vendor_id and rule.product_id:
+    if rule.vendor_id or rule.product_id:
         vendor_id = _normalize_hex(rule.vendor_id)
         product_id = _normalize_hex(rule.product_id)
         return [
             device
             for device in devices
-            if device.vendor_id == vendor_id and device.product_id == product_id
+            if (not vendor_id or device.vendor_id == vendor_id)
+            and (not product_id or device.product_id == product_id)
         ]
 
     if rule.match == "exact":

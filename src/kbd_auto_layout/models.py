@@ -11,6 +11,7 @@ class DeviceRule:
     match: str = "exact"
     vendor_id: str = ""
     product_id: str = ""
+    priority: int = 0
 
 
 @dataclass
@@ -35,3 +36,4 @@ class GeneralConfig:
     apply_retries: int = 5
     apply_retry_delay: float = 1.0
     backend: str = "auto"
+    device_cache_ttl: float = 2.0

@@ -4,6 +4,8 @@ import os
 import subprocess
 from dataclasses import dataclass
 
+SUBPROCESS_TIMEOUT_SECONDS = 2
+
 
 @dataclass
 class KeyboardBackend:
@@ -30,6 +32,7 @@ class X11Backend(KeyboardBackend):
         subprocess.run(
             ["setxkbmap", "-layout", layout, "-variant", variant or "", "-option", ""],
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
 
     def current_query(self) -> str:
@@ -38,6 +41,7 @@ class X11Backend(KeyboardBackend):
             capture_output=True,
             text=True,
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
         return result.stdout
 
@@ -60,6 +64,7 @@ class GnomeWaylandBackend(KeyboardBackend):
                 f"[('xkb', '{source}')]",
             ],
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
 
     def current_query(self) -> str:
@@ -68,11 +73,29 @@ class GnomeWaylandBackend(KeyboardBackend):
             capture_output=True,
             text=True,
             check=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
         return result.stdout
 
     def current_layout(self) -> tuple[str, str]:
         return parse_gnome_sources(self.current_query())
+
+
+class WaylandBackend(KeyboardBackend):
+    def __init__(self) -> None:
+        super().__init__("wayland")
+
+    def set_layout(self, layout: str, variant: str = "") -> None:
+        raise NotImplementedError("Generic Wayland backend is not implemented yet")
+
+    def current_query(self) -> str:
+        return "Generic Wayland backend is not implemented yet"
+
+    def current_layout(self) -> tuple[str, str]:
+        return "", ""
+
+    def layout_matches(self, layout: str, variant: str = "") -> bool:
+        return False
 
 
 class UnsupportedBackend(KeyboardBackend):
@@ -101,7 +124,6 @@ def parse_setxkbmap_query(query: str) -> tuple[str, str]:
 
 
 def parse_gnome_sources(value: str) -> tuple[str, str]:
-    # Example: "[('xkb', 'us'), ('xkb', 'es+nodeadkeys')]"
     marker = "'xkb', '"
     if marker not in value:
         return "", ""
@@ -125,6 +147,9 @@ def detect_backend(configured_backend: str = "auto") -> KeyboardBackend:
     if configured_backend in {"gnome-wayland", "gnome"}:
         return GnomeWaylandBackend()
 
+    if configured_backend == "wayland":
+        return WaylandBackend()
+
     if configured_backend != "auto":
         return UnsupportedBackend(f"Unsupported backend: {configured_backend}")
 
@@ -135,8 +160,6 @@ def detect_backend(configured_backend: str = "auto") -> KeyboardBackend:
         return GnomeWaylandBackend()
 
     if session_type == "wayland":
-        return UnsupportedBackend(
-            "Wayland session detected, but only GNOME Wayland is currently supported."
-        )
+        return WaylandBackend()
 
     return X11Backend()

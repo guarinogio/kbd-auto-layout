@@ -172,3 +172,37 @@ def test_rules_lists_rules(monkeypatch, capsys):
     assert rc == 0
     assert '1. name="Keychron"' in out
     assert 'connected="yes"' in out
+
+
+
+def test_assign_sets_priority_and_hardware(monkeypatch):
+    saved = {}
+    general = GeneralConfig()
+    rules = []
+
+    monkeypatch.setattr("kbd_auto_layout.cli.is_valid_layout", lambda layout: True)
+    monkeypatch.setattr("kbd_auto_layout.cli.is_valid_variant", lambda layout, variant: True)
+    monkeypatch.setattr("kbd_auto_layout.cli.load_config", lambda: (general, rules, []))
+
+    def fake_save_user_config(general_cfg, rules_cfg):
+        saved["rules"] = rules_cfg
+        return Path("/tmp/config.ini")
+
+    monkeypatch.setattr("kbd_auto_layout.cli.save_user_config", fake_save_user_config)
+
+    args = Args(
+        device="Keychron hardware",
+        layout="us",
+        variant="",
+        match="contains",
+        vendor_id="0x3434",
+        product_id="0260",
+        priority=50,
+    )
+
+    rc = cmd_assign(args)
+
+    assert rc == 0
+    assert saved["rules"][0].vendor_id == "3434"
+    assert saved["rules"][0].product_id == "0260"
+    assert saved["rules"][0].priority == 50
