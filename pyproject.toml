@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kbd-auto-layout"
-version = "1.6.0"
+version = "1.6.1"
 description = "Automatic keyboard layout switching for X11 based on connected keyboards"
 readme = "README.md"
 requires-python = ">=3.10"

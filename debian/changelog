@@ -1,3 +1,9 @@
+kbd-auto-layout (1.6.1) noble; urgency=medium
+
+  * Use Ubuntu Noble distribution in Debian changelog for clean lintian builds.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 15:47:38 +0200
+
 kbd-auto-layout (1.6.0) unstable; urgency=medium
 
   * Add detect command with suggested rules.
