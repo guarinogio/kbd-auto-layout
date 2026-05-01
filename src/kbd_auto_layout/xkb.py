@@ -34,12 +34,7 @@ def is_valid_variant(layout: str, variant: str) -> bool:
 
 
 def set_layout(layout: str, variant: str = "") -> None:
-    cmd = ["setxkbmap", "-layout", layout]
-    if variant:
-        cmd.extend(["-variant", variant])
-    else:
-        cmd.extend(["-variant", ""])
-    cmd.extend(["-option", ""])
+    cmd = ["setxkbmap", "-layout", layout, "-variant", variant or "", "-option", ""]
     subprocess.run(cmd, check=True)
 
 
@@ -51,3 +46,21 @@ def current_layout_query() -> str:
         check=True,
     )
     return result.stdout
+
+
+def parse_current_xkb(query: str) -> tuple[str, str]:
+    values: dict[str, str] = {}
+    for line in query.splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        values[key.strip()] = value.strip()
+    return values.get("layout", ""), values.get("variant", "")
+
+
+def current_layout() -> tuple[str, str]:
+    return parse_current_xkb(current_layout_query())
+
+
+def layout_matches(layout: str, variant: str = "") -> bool:
+    return current_layout() == (layout, variant)

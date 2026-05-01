@@ -3,16 +3,19 @@ from __future__ import annotations
 import argparse
 import logging
 import signal
+import subprocess
 import time
 
 from kbd_auto_layout.config import load_config
 from kbd_auto_layout.logging_utils import setup_logging
 from kbd_auto_layout.xinput import match_device_names
-from kbd_auto_layout.xkb import set_layout
+from kbd_auto_layout.xkb import layout_matches, set_layout
 
 log = logging.getLogger("kbd_auto_layout.daemon")
 
 _reload_requested = False
+APPLY_RETRIES = 5
+APPLY_RETRY_DELAY_SECONDS = 1
 
 
 def _handle_sighup(_signum, _frame) -> None:
@@ -27,6 +30,41 @@ def find_active_rule():
         if matches:
             return general, rule, matches
     return general, None, []
+
+
+def apply_layout_verified(layout: str, variant: str, reason: str) -> bool:
+    for attempt in range(1, APPLY_RETRIES + 1):
+        try:
+            if layout_matches(layout, variant):
+                return True
+
+            set_layout(layout, variant)
+
+            if layout_matches(layout, variant):
+                return True
+
+        except (OSError, subprocess.CalledProcessError) as exc:
+            log.warning(
+                "Failed to apply layout=%s variant=%s for %s, attempt %s/%s: %s",
+                layout,
+                variant,
+                reason,
+                attempt,
+                APPLY_RETRIES,
+                exc,
+            )
+
+        if attempt < APPLY_RETRIES:
+            time.sleep(APPLY_RETRY_DELAY_SECONDS)
+
+    log.warning(
+        "Layout=%s variant=%s for %s was not active after %s attempts",
+        layout,
+        variant,
+        reason,
+        APPLY_RETRIES,
+    )
+    return False
 
 
 def run_loop() -> None:
@@ -45,27 +83,38 @@ def run_loop() -> None:
 
         if rule is not None:
             state = (rule.layout, rule.variant, rule.match, tuple(matches))
-            if state != last_state:
-                set_layout(rule.layout, rule.variant)
-                log.info(
-                    "Applied device rule: pattern=%s match=%s layout=%s variant=%s matched=%s",
-                    rule.name,
-                    rule.match,
-                    rule.layout,
-                    rule.variant,
-                    ",".join(matches),
-                )
-                last_state = state
+            if state != last_state or not layout_matches(rule.layout, rule.variant):
+                if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}"):
+                    log.info(
+                        "Applied device rule: pattern=%s match=%s layout=%s variant=%s matched=%s",
+                        rule.name,
+                        rule.match,
+                        rule.layout,
+                        rule.variant,
+                        ",".join(matches),
+                    )
+                    last_state = state
+                else:
+                    last_state = None
         else:
             state = (general.default_layout, general.default_variant, "default", ())
-            if state != last_state:
-                set_layout(general.default_layout, general.default_variant)
-                log.info(
-                    "Applied default layout: %s %s",
+            if state != last_state or not layout_matches(
+                general.default_layout,
+                general.default_variant,
+            ):
+                if apply_layout_verified(
                     general.default_layout,
                     general.default_variant,
-                )
-                last_state = state
+                    "default layout",
+                ):
+                    log.info(
+                        "Applied default layout: %s %s",
+                        general.default_layout,
+                        general.default_variant,
+                    )
+                    last_state = state
+                else:
+                    last_state = None
 
         time.sleep(general.poll_interval)
 

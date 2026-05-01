@@ -1,3 +1,11 @@
+kbd-auto-layout (1.0.6) stable; urgency=medium
+
+  * Fix startup layout application when XKB is not ready immediately.
+  * Re-apply expected layout if current XKB state does not match the active rule.
+  * Add startup delay to user systemd service.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 12:57:22 +0200
+
 kbd-auto-layout (1.0.5) UNRELEASED; urgency=medium
 
   * Initial release.
