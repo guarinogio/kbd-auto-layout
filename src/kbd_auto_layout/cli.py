@@ -15,7 +15,7 @@ from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, s
 from kbd_auto_layout.events import event_monitor_available
 from kbd_auto_layout.daemon import find_active_rule, sorted_rules
 from kbd_auto_layout.models import DeviceRule, KeyboardDevice
-from kbd_auto_layout.xinput import list_keyboard_devices, match_rule_devices
+from kbd_auto_layout.xinput import list_keyboard_devices, match_rule_devices, clear_device_cache
 from kbd_auto_layout.xkb import (
     current_layout_query,
     is_valid_layout,
@@ -374,6 +374,198 @@ def cmd_set_event_timeout(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def _choose_device_interactively(devices):
+    if not devices:
+        print("No keyboards detected.", file=sys.stderr)
+        return None
+
+    print("Detected keyboards:")
+    for idx, device in enumerate(devices, start=1):
+        hardware = f" ({device.hardware_id})" if device.hardware_id else ""
+        print(f"  {idx}. {device.name}{hardware}")
+
+    raw = input("Select keyboard number: ").strip()
+    try:
+        index = int(raw)
+    except ValueError:
+        print("Invalid selection.", file=sys.stderr)
+        return None
+
+    if index < 1 or index > len(devices):
+        print("Invalid selection.", file=sys.stderr)
+        return None
+
+    return devices[index - 1]
+
+
+def _find_device_by_query(devices, query: str):
+    query = query.lower()
+    matches = [device for device in devices if query in device.name.lower()]
+    if len(matches) == 1:
+        return matches[0]
+    return None
+
+
+def cmd_use_current_keyboard(args: argparse.Namespace) -> int:
+    clear_device_cache()
+    devices = list_keyboard_devices()
+
+    if args.device:
+        device = _find_device_by_query(devices, args.device)
+        if device is None:
+            print(f'Could not uniquely match device: "{args.device}"', file=sys.stderr)
+            return 1
+    elif args.interactive:
+        device = _choose_device_interactively(devices)
+        if device is None:
+            return 1
+    elif len(devices) == 1:
+        device = devices[0]
+    else:
+        print("Multiple keyboards detected. Use --device or --interactive.", file=sys.stderr)
+        for device in devices:
+            hardware = f" ({device.hardware_id})" if device.hardware_id else ""
+            print(f"  - {device.name}{hardware}", file=sys.stderr)
+        return 2
+
+    if not is_valid_layout(args.layout):
+        print(f'Invalid layout: "{args.layout}"', file=sys.stderr)
+        return 2
+
+    if not is_valid_variant(args.layout, args.variant):
+        print(f'Invalid variant "{args.variant}" for layout "{args.layout}"', file=sys.stderr)
+        return 2
+
+    general, rules, _ = load_config()
+
+    vendor_id = device.vendor_id if args.hardware and device.vendor_id else ""
+    product_id = device.product_id if args.hardware and device.product_id else ""
+    match = "exact" if args.exact else "contains"
+    name = device.name if args.exact else args.pattern or device.name.split()[0]
+
+    new_rule = DeviceRule(
+        name=name,
+        layout=args.layout,
+        variant=args.variant or "",
+        match=match,
+        vendor_id=vendor_id,
+        product_id=product_id,
+        priority=args.priority,
+    )
+
+    updated = False
+    for rule in rules:
+        if rule.name == new_rule.name and rule.match == new_rule.match:
+            rule.layout = new_rule.layout
+            rule.variant = new_rule.variant
+            rule.vendor_id = new_rule.vendor_id
+            rule.product_id = new_rule.product_id
+            rule.priority = new_rule.priority
+            updated = True
+            break
+
+    if not updated:
+        rules.append(new_rule)
+
+    path = save_user_config(general, rules)
+    print(f"Saved rule in {path}")
+    print(f'Rule: name="{new_rule.name}" match="{new_rule.match}" layout="{new_rule.layout}" priority={new_rule.priority}')
+    if new_rule.vendor_id or new_rule.product_id:
+        print(f"Hardware: {new_rule.vendor_id}:{new_rule.product_id}")
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    clear_device_cache()
+    devices = list_keyboard_devices()
+
+    print("kbd-auto-layout setup")
+    print()
+
+    default_layout = input(f"Default layout [{args.default_layout}]: ").strip() or args.default_layout
+    default_variant = input(f"Default variant [{args.default_variant}]: ").strip() or args.default_variant
+
+    device = _choose_device_interactively(devices)
+    if device is None:
+        return 1
+
+    layout = input(f"Layout for {device.name} [{args.layout}]: ").strip() or args.layout
+    variant = input("Variant for this keyboard []: ").strip()
+    use_hardware = input("Use hardware ID if available? [Y/n]: ").strip().lower() not in {"n", "no"}
+
+    general, rules, _ = load_config()
+    general.default_layout = default_layout
+    general.default_variant = default_variant
+
+    rule = DeviceRule(
+        name=device.name if not args.contains else args.contains,
+        layout=layout,
+        variant=variant,
+        match="contains" if args.contains else "exact",
+        vendor_id=device.vendor_id if use_hardware else "",
+        product_id=device.product_id if use_hardware else "",
+        priority=args.priority,
+    )
+    rules.append(rule)
+
+    path = save_user_config(general, rules)
+    print()
+    print(f"Saved config in {path}")
+    print("Run:")
+    print("  kbd-auto-layoutctl reload")
+    print("  kbd-auto-layoutctl status")
+    return 0
+
+
+def cmd_explain(args: argparse.Namespace) -> int:
+    general, rules, files = load_config()
+    devices = list_keyboard_devices()
+
+    print("Config files:")
+    for file in files:
+        print(f"  - {file}")
+
+    print()
+    print("Default:")
+    print(f"  layout={general.default_layout}")
+    print(f"  variant={general.default_variant}")
+    print(f"  backend={general.backend}")
+    print(f"  event_mode={general.event_mode}")
+
+    print()
+    print("Detected keyboards:")
+    for device in devices:
+        print(f"  - {device.name}")
+        if device.hardware_id:
+            print(f"    hardware={device.hardware_id}")
+
+    print()
+    print("Rule evaluation:")
+    if not rules:
+        print("  No rules configured. Default layout will be used.")
+        return 0
+
+    for idx, rule in enumerate(sorted_rules(rules), start=1):
+        matches = match_rule_devices(rule, general.device_cache_ttl)
+        print(f"  {idx}. {rule.name}")
+        print(f"     priority={rule.priority} match={rule.match} layout={rule.layout} variant={rule.variant}")
+        if rule.vendor_id or rule.product_id:
+            print(f"     hardware={rule.vendor_id}:{rule.product_id}")
+        if matches:
+            print(f"     result=MATCH ({', '.join(device.name for device in matches)})")
+        else:
+            print("     result=no match")
+
+    _general, active_rule, matches = find_active_rule()
+    print()
+    if active_rule:
+        print(f'Active rule: "{active_rule.name}" -> {active_rule.layout} {active_rule.variant}'.strip())
+        print(f"Matched devices: {', '.join(device.name for device in matches)}")
+    else:
+        print(f"Active rule: default -> {general.default_layout} {general.default_variant}".strip())
+    return 0
+
 def cmd_reload(_args: argparse.Namespace) -> int:
     result = subprocess.run(
         ["systemctl", "--user", "kill", "-s", "HUP", "kbd-auto-layout.service"],
@@ -534,6 +726,23 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     checks.append(("user service active", service_ok, service_detail))
 
+    service_enabled = False
+    service_enabled_detail = ""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-enabled", "kbd-auto-layout.service"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=2,
+        )
+        service_enabled = result.stdout.strip() == "enabled"
+        service_enabled_detail = result.stdout.strip() or result.stderr.strip()
+    except Exception as exc:
+        service_enabled_detail = str(exc)
+
+    checks.append(("user service enabled", service_enabled, service_enabled_detail))
+
     failed = False
     for label, ok, detail in checks:
         mark = "OK" if ok else "FAIL"
@@ -632,6 +841,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_watch.add_argument("--once", action="store_true")
     p_watch.add_argument("--json", action="store_true")
     p_watch.set_defaults(func=cmd_watch)
+
+    p_setup = sub.add_parser("setup", help="Interactive first-time setup wizard")
+    p_setup.add_argument("--default-layout", default="es")
+    p_setup.add_argument("--default-variant", default="nodeadkeys")
+    p_setup.add_argument("--layout", default="us")
+    p_setup.add_argument("--contains", help="Use contains matching with this pattern")
+    p_setup.add_argument("--priority", type=int, default=10)
+    p_setup.set_defaults(func=cmd_setup)
+
+    p_use_current = sub.add_parser("use-current-keyboard", help="Create a rule from a connected keyboard")
+    p_use_current.add_argument("layout")
+    p_use_current.add_argument("variant", nargs="?", default="")
+    p_use_current.add_argument("--device", help="Substring to select a connected keyboard")
+    p_use_current.add_argument("--interactive", action="store_true")
+    p_use_current.add_argument("--exact", action="store_true", help="Use exact name matching")
+    p_use_current.add_argument("--pattern", help="Pattern to save when using contains matching")
+    p_use_current.add_argument("--hardware", action="store_true", help="Prefer vendor/product matching")
+    p_use_current.add_argument("--priority", type=int, default=10)
+    p_use_current.set_defaults(func=cmd_use_current_keyboard)
+
+    p_explain = sub.add_parser("explain", help="Explain rule evaluation and active layout")
+    p_explain.set_defaults(func=cmd_explain)
 
     p_reload = sub.add_parser("reload", help="Reload daemon config")
     p_reload.set_defaults(func=cmd_reload)

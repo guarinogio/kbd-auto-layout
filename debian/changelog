@@ -1,3 +1,13 @@
+kbd-auto-layout (1.4.0) stable; urgency=medium
+
+  * Improve hardware ID detection using xinput and udevadm.
+  * Add interactive setup wizard.
+  * Add use-current-keyboard command.
+  * Add explain command for rule evaluation.
+  * Improve doctor checks for service enablement.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 15:18:57 +0200
+
 kbd-auto-layout (1.3.0) stable; urgency=medium
 
   * Add event-driven input monitoring using udevadm.

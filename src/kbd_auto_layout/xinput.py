@@ -11,6 +11,7 @@ _KEYBOARD_LINE_RE = re.compile(
     r"^\s*↳?\s*(?P<name>.+?)\s+id=(?P<id>\d+)\s+\[slave\s+keyboard",
 )
 _PRODUCT_ID_RE = re.compile(r"Device Product ID:\s+(?P<vendor>\d+),\s+(?P<product>\d+)")
+_UDEV_ID_RE = re.compile(r"ID_VENDOR_ID=(?P<vendor>[0-9a-fA-F]+).*?ID_MODEL_ID=(?P<product>[0-9a-fA-F]+)", re.S)
 
 _EXCLUDED_EXACT = {
     "Video Bus",
@@ -70,7 +71,7 @@ def _is_real_keyboard_name(name: str) -> bool:
     return True
 
 
-def _device_product_ids(device_id: str) -> tuple[str, str]:
+def _device_product_ids_from_props(device_id: str) -> tuple[str, str]:
     result = subprocess.run(
         ["xinput", "list-props", device_id],
         capture_output=True,
@@ -86,6 +87,57 @@ def _device_product_ids(device_id: str) -> tuple[str, str]:
         if match:
             return _to_hex_id(match.group("vendor")), _to_hex_id(match.group("product"))
     return "", ""
+
+
+def _device_node_from_props(device_id: str) -> str:
+    result = subprocess.run(
+        ["xinput", "list-props", device_id],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0:
+        return ""
+
+    for line in result.stdout.splitlines():
+        if "Device Node" in line and '"' in line:
+            return line.split('"', 1)[1].split('"', 1)[0]
+    return ""
+
+
+def _device_product_ids_from_udev(device_id: str) -> tuple[str, str]:
+    node = _device_node_from_props(device_id)
+    if not node:
+        return "", ""
+
+    result = subprocess.run(
+        ["udevadm", "info", "--query=property", f"--name={node}"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS,
+    )
+    if result.returncode != 0:
+        return "", ""
+
+    vendor = ""
+    product = ""
+    for line in result.stdout.splitlines():
+        if line.startswith("ID_VENDOR_ID="):
+            vendor = _normalize_hex(line.split("=", 1)[1])
+        elif line.startswith("ID_MODEL_ID="):
+            product = _normalize_hex(line.split("=", 1)[1])
+
+    return vendor, product
+
+
+def _device_product_ids(device_id: str) -> tuple[str, str]:
+    vendor, product = _device_product_ids_from_props(device_id)
+    if vendor or product:
+        return vendor, product
+
+    return _device_product_ids_from_udev(device_id)
 
 
 def list_keyboard_devices() -> list[KeyboardDevice]:
