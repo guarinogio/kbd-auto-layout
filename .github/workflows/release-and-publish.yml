@@ -74,7 +74,7 @@ jobs:
           cd /tmp/kbd-auto-layout-apt
           mkdir -p conf
 
-          cat > conf/distributions <<'DIST'
+          cat > conf/distributions <<DIST
           Origin: guarinogio
           Label: kbd-auto-layout
           Suite: stable
@@ -83,7 +83,7 @@ jobs:
           Architectures: amd64
           Components: main
           Description: APT repository for kbd-auto-layout
-          SignWith: B815D1A3EFE1740E
+          SignWith: ${APT_GPG_KEY_ID}
           DIST
 
           gpg --armor --export "${APT_GPG_KEY_ID}" > public.key
