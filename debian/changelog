@@ -1,3 +1,9 @@
+kbd-auto-layout (1.0.7) stable; urgency=medium
+
+  * Rebuild startup XKB apply fix with a fresh package version.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 13:10:00 +0200
+
 kbd-auto-layout (1.0.6) stable; urgency=medium
 
   * Fix startup layout application when XKB is not ready immediately.
