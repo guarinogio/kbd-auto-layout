@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import subprocess
 
+from kbd_auto_layout.backends import detect_backend, parse_setxkbmap_query
+
 
 def list_layouts() -> list[str]:
     result = subprocess.run(
@@ -33,36 +35,21 @@ def is_valid_variant(layout: str, variant: str) -> bool:
     return variant in list_variants(layout)
 
 
-def set_layout(layout: str, variant: str = "") -> None:
-    subprocess.run(
-        ["setxkbmap", "-layout", layout, "-variant", variant or "", "-option", ""],
-        check=True,
-    )
+def set_layout(layout: str, variant: str = "", backend: str = "auto") -> None:
+    detect_backend(backend).set_layout(layout, variant)
 
 
-def current_layout_query() -> str:
-    result = subprocess.run(
-        ["setxkbmap", "-query"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout
+def current_layout_query(backend: str = "auto") -> str:
+    return detect_backend(backend).current_query()
 
 
 def parse_current_xkb(query: str) -> tuple[str, str]:
-    values: dict[str, str] = {}
-    for line in query.splitlines():
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        values[key.strip()] = value.strip()
-    return values.get("layout", ""), values.get("variant", "")
+    return parse_setxkbmap_query(query)
 
 
-def current_layout() -> tuple[str, str]:
-    return parse_current_xkb(current_layout_query())
+def current_layout(backend: str = "auto") -> tuple[str, str]:
+    return detect_backend(backend).current_layout()
 
 
-def layout_matches(layout: str, variant: str = "") -> bool:
-    return current_layout() == (layout, variant)
+def layout_matches(layout: str, variant: str = "", backend: str = "auto") -> bool:
+    return detect_backend(backend).layout_matches(layout, variant)

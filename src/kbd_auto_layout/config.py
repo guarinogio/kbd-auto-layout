@@ -28,8 +28,16 @@ def default_config_parser() -> configparser.ConfigParser:
         "poll_interval": str(general.poll_interval),
         "apply_retries": str(general.apply_retries),
         "apply_retry_delay": str(general.apply_retry_delay),
+        "backend": general.backend,
     }
     return parser
+
+
+def _normalize_hex(value: str) -> str:
+    value = (value or "").strip().lower()
+    if value.startswith("0x"):
+        value = value[2:]
+    return value.zfill(4) if value else ""
 
 
 def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
@@ -43,6 +51,7 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
         general.poll_interval = parser.getint("general", "poll_interval", fallback=2)
         general.apply_retries = parser.getint("general", "apply_retries", fallback=5)
         general.apply_retry_delay = parser.getfloat("general", "apply_retry_delay", fallback=1.0)
+        general.backend = parser.get("general", "backend", fallback="auto")
 
     rules: list[DeviceRule] = []
     for section in parser.sections():
@@ -55,6 +64,8 @@ def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
                 layout=parser.get(section, "layout", fallback="us"),
                 variant=parser.get(section, "variant", fallback=""),
                 match=parser.get(section, "match", fallback="exact"),
+                vendor_id=_normalize_hex(parser.get(section, "vendor_id", fallback="")),
+                product_id=_normalize_hex(parser.get(section, "product_id", fallback="")),
             )
         )
 
@@ -71,6 +82,7 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
         "poll_interval": str(general.poll_interval),
         "apply_retries": str(general.apply_retries),
         "apply_retry_delay": str(general.apply_retry_delay),
+        "backend": general.backend,
     }
 
     for rule in rules:
@@ -80,6 +92,10 @@ def save_user_config(general: GeneralConfig, rules: list[DeviceRule]) -> Path:
             "variant": rule.variant,
             "match": rule.match,
         }
+        if rule.vendor_id:
+            parser[section]["vendor_id"] = rule.vendor_id
+        if rule.product_id:
+            parser[section]["product_id"] = rule.product_id
 
     with USER_CONFIG.open("w", encoding="utf-8") as fh:
         parser.write(fh)

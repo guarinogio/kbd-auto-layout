@@ -7,7 +7,7 @@ from kbd_auto_layout.cli import (
     cmd_rules,
     cmd_set_poll_interval,
 )
-from kbd_auto_layout.models import DeviceRule, GeneralConfig
+from kbd_auto_layout.models import DeviceRule, GeneralConfig, KeyboardDevice
 from kbd_auto_layout.xinput import match_device_names
 
 
@@ -160,7 +160,10 @@ def test_rules_lists_rules(monkeypatch, capsys):
     rules = [DeviceRule(name="Keychron", layout="us", variant="", match="contains")]
 
     monkeypatch.setattr("kbd_auto_layout.cli.load_config", lambda: (GeneralConfig(), rules, []))
-    monkeypatch.setattr("kbd_auto_layout.cli.match_device_names", lambda name, match: ["Keychron K2"])
+    monkeypatch.setattr(
+        "kbd_auto_layout.cli.match_rule_devices",
+        lambda rule: [KeyboardDevice(name="Keychron K2")],
+    )
 
     args = Args(json=False)
     rc = cmd_rules(args)

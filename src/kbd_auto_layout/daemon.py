@@ -6,11 +6,11 @@ import signal
 import subprocess
 import time
 
+from kbd_auto_layout.backends import detect_backend
 from kbd_auto_layout.config import load_config
 from kbd_auto_layout.logging_utils import setup_logging
-from kbd_auto_layout.models import GeneralConfig
-from kbd_auto_layout.xinput import match_device_names
-from kbd_auto_layout.xkb import layout_matches, set_layout
+from kbd_auto_layout.models import DeviceRule, GeneralConfig, KeyboardDevice
+from kbd_auto_layout.xinput import match_rule_devices
 
 log = logging.getLogger("kbd_auto_layout.daemon")
 
@@ -22,10 +22,10 @@ def _handle_sighup(_signum, _frame) -> None:
     _reload_requested = True
 
 
-def find_active_rule():
+def find_active_rule() -> tuple[GeneralConfig, DeviceRule | None, list[KeyboardDevice]]:
     general, rules, _ = load_config()
     for rule in rules:
-        matches = match_device_names(rule.name, rule.match)
+        matches = match_rule_devices(rule)
         if matches:
             return general, rule, matches
     return general, None, []
@@ -39,22 +39,24 @@ def apply_layout_verified(
 ) -> bool:
     retries = max(1, general.apply_retries)
     delay = max(0.0, general.apply_retry_delay)
+    backend = detect_backend(general.backend)
 
     for attempt in range(1, retries + 1):
         try:
-            if layout_matches(layout, variant):
+            if backend.layout_matches(layout, variant):
                 return True
 
-            set_layout(layout, variant)
+            backend.set_layout(layout, variant)
 
-            if layout_matches(layout, variant):
+            if backend.layout_matches(layout, variant):
                 return True
 
-        except (OSError, subprocess.CalledProcessError) as exc:
+        except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
             log.warning(
-                "Failed to apply layout=%s variant=%s for %s, attempt %s/%s: %s",
+                "Failed to apply layout=%s variant=%s backend=%s for %s, attempt %s/%s: %s",
                 layout,
                 variant,
+                backend.name,
                 reason,
                 attempt,
                 retries,
@@ -74,6 +76,14 @@ def apply_layout_verified(
     return False
 
 
+def _device_names(devices: list[KeyboardDevice]) -> str:
+    return ",".join(device.name for device in devices)
+
+
+def _device_state(devices: list[KeyboardDevice]) -> tuple[str, ...]:
+    return tuple(f"{device.name}:{device.hardware_id}" for device in devices)
+
+
 def run_loop() -> None:
     global _reload_requested
     last_state: tuple[str, str, str, tuple[str, ...]] | None = None
@@ -87,25 +97,29 @@ def run_loop() -> None:
             last_state = None
 
         general, rule, matches = find_active_rule()
+        backend = detect_backend(general.backend)
 
         if rule is not None:
-            state = (rule.layout, rule.variant, rule.match, tuple(matches))
-            if state != last_state or not layout_matches(rule.layout, rule.variant):
+            state = (rule.layout, rule.variant, rule.match, _device_state(matches))
+            if state != last_state or not backend.layout_matches(rule.layout, rule.variant):
                 if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}", general):
                     log.info(
-                        "Applied device rule: pattern=%s match=%s layout=%s variant=%s matched=%s",
+                        "Applied device rule: pattern=%s match=%s vid=%s pid=%s "
+                        "layout=%s variant=%s matched=%s",
                         rule.name,
                         rule.match,
+                        rule.vendor_id,
+                        rule.product_id,
                         rule.layout,
                         rule.variant,
-                        ",".join(matches),
+                        _device_names(matches),
                     )
                     last_state = state
                 else:
                     last_state = None
         else:
             state = (general.default_layout, general.default_variant, "default", ())
-            if state != last_state or not layout_matches(
+            if state != last_state or not backend.layout_matches(
                 general.default_layout,
                 general.default_variant,
             ):

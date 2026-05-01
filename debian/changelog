@@ -1,3 +1,12 @@
+kbd-auto-layout (1.1.0) stable; urgency=medium
+
+  * Add optional VID/PID based keyboard rules.
+  * Add backend abstraction for X11 and GNOME Wayland.
+  * Add rules management improvements and preparation for watch/debug workflows.
+  * Keep existing X11 behavior as the default path.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 13:49:45 +0200
+
 kbd-auto-layout (1.0.9) stable; urgency=medium
 
   * Rebuild v1.0.8 improvements with corrected pyproject metadata.

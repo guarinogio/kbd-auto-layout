@@ -10,8 +10,10 @@ from pathlib import Path
 
 from kbd_auto_layout import __version__
 from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, save_user_config
+from kbd_auto_layout.backends import detect_backend
 from kbd_auto_layout.models import DeviceRule
-from kbd_auto_layout.xinput import is_device_connected, list_keyboard_names, match_device_names
+from kbd_auto_layout.xinput import list_keyboard_devices, match_rule_devices
+from kbd_auto_layout.xinput import list_keyboard_names, match_device_names
 from kbd_auto_layout.xkb import (
     current_layout_query,
     is_valid_layout,
@@ -28,24 +30,34 @@ def _print_json(data: object) -> None:
 
 
 def _rule_to_dict(rule: DeviceRule) -> dict[str, object]:
-    matched_devices = match_device_names(rule.name, rule.match)
+    matched_devices = match_rule_devices(rule)
     return {
         "name": rule.name,
         "layout": rule.layout,
         "variant": rule.variant,
         "match": rule.match,
+        "vendor_id": rule.vendor_id,
+        "product_id": rule.product_id,
         "connected": bool(matched_devices),
-        "matched_devices": matched_devices,
+        "matched_devices": [device.name for device in matched_devices],
+        "matched_hardware_ids": [device.hardware_id for device in matched_devices if device.hardware_id],
     }
 
 
 def cmd_list(args: argparse.Namespace) -> int:
     devices = []
-    for name in list_keyboard_names():
-        connected = is_device_connected(name)
-        if args.connected and not connected:
+    for device in list_keyboard_devices():
+        if args.connected and not device.connected:
             continue
-        devices.append({"name": name, "connected": connected})
+        devices.append(
+            {
+                "name": device.name,
+                "connected": device.connected,
+                "vendor_id": device.vendor_id,
+                "product_id": device.product_id,
+                "hardware_id": device.hardware_id,
+            }
+        )
 
     if args.json:
         _print_json(devices)
@@ -53,7 +65,8 @@ def cmd_list(args: argparse.Namespace) -> int:
 
     for device in devices:
         status = "connected" if device["connected"] else "disconnected"
-        print(f"{device['name']}\t{status}")
+        hardware = f"\t{device['hardware_id']}" if device["hardware_id"] else ""
+        print(f"{device['name']}\t{status}{hardware}")
     return 0
 
 
@@ -81,6 +94,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             "poll_interval": general.poll_interval,
             "apply_retries": general.apply_retries,
             "apply_retry_delay": general.apply_retry_delay,
+            "backend": general.backend,
         },
         "detected_keyboards": detected_keyboards,
         "rules": [_rule_to_dict(rule) for rule in rules],
@@ -104,6 +118,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"  poll_interval={general.poll_interval}")
     print(f"  apply_retries={general.apply_retries}")
     print(f"  apply_retry_delay={general.apply_retry_delay}")
+    print(f"  backend={general.backend}")
 
     print("\nDetected keyboards:")
     for name in detected_keyboards:
@@ -120,6 +135,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             print(
                 f'  - name="{rule.name}" layout="{rule.layout}" '
                 f'variant="{rule.variant}" match="{rule.match}" '
+                f'vendor_id="{rule.vendor_id}" product_id="{rule.product_id}" '
                 f'connected="{connected}" matched_devices="{matched_text}"'
             )
 
@@ -149,10 +165,13 @@ def cmd_rules(args: argparse.Namespace) -> int:
     for item in data:
         matched = ", ".join(item["matched_devices"]) if item["matched_devices"] else "-"
         connected = "yes" if item["connected"] else "no"
+        hardware = ""
+        if item["vendor_id"] or item["product_id"]:
+            hardware = f' vendor_id="{item["vendor_id"]}" product_id="{item["product_id"]}"'
         print(
             f'{item["index"]}. name="{item["name"]}" '
             f'layout="{item["layout"]}" variant="{item["variant"]}" '
-            f'match="{item["match"]}" connected="{connected}" '
+            f'match="{item["match"]}"{hardware} connected="{connected}" '
             f'matched_devices="{matched}"'
         )
     return 0
@@ -179,6 +198,16 @@ def cmd_assign(args: argparse.Namespace) -> int:
         if rule.name == args.device and rule.match == args.match:
             rule.layout = args.layout
             rule.variant = args.variant or ""
+            rule.vendor_id = (
+                (getattr(args, "vendor_id", "") or "").lower().replace("0x", "").zfill(4)
+                if getattr(args, "vendor_id", "")
+                else rule.vendor_id
+            )
+            rule.product_id = (
+                (getattr(args, "product_id", "") or "").lower().replace("0x", "").zfill(4)
+                if getattr(args, "product_id", "")
+                else rule.product_id
+            )
             updated = True
             break
 
@@ -189,6 +218,12 @@ def cmd_assign(args: argparse.Namespace) -> int:
                 layout=args.layout,
                 variant=args.variant or "",
                 match=args.match,
+                vendor_id=(getattr(args, "vendor_id", "") or "").lower().replace("0x", "").zfill(4)
+                if getattr(args, "vendor_id", "")
+                else "",
+                product_id=(getattr(args, "product_id", "") or "").lower().replace("0x", "").zfill(4)
+                if getattr(args, "product_id", "")
+                else "",
             )
         )
 
@@ -303,11 +338,12 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     if session_type == "wayland":
         session_detail = "wayland detected; kbd-auto-layout currently supports X11 only"
 
+    backend = detect_backend("auto")
     checks.append(
         (
-            "XDG_SESSION_TYPE is x11",
-            session_type == "x11",
-            session_detail,
+            "keyboard backend detected",
+            backend.name != "unsupported",
+            f"{backend.name}: {getattr(backend, 'reason', session_detail)}",
         )
     )
     checks.append(
@@ -362,6 +398,60 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def cmd_watch(args: argparse.Namespace) -> int:
+    import time
+
+    previous = None
+    while True:
+        general, rules, _ = load_config()
+        backend = detect_backend(general.backend)
+        devices = list_keyboard_devices()
+
+        active_rule = None
+        active_matches = []
+        for rule in rules:
+            matches = match_rule_devices(rule)
+            if matches:
+                active_rule = rule
+                active_matches = matches
+                break
+
+        target_layout = active_rule.layout if active_rule else general.default_layout
+        target_variant = active_rule.variant if active_rule else general.default_variant
+        state = (
+            tuple((device.name, device.hardware_id) for device in devices),
+            active_rule.name if active_rule else "default",
+            target_layout,
+            target_variant,
+            backend.current_layout(),
+        )
+
+        if state != previous:
+            print("Detected keyboards:")
+            for device in devices:
+                hardware = f" ({device.hardware_id})" if device.hardware_id else ""
+                print(f"  - {device.name}{hardware}")
+
+            if active_rule:
+                print(
+                    f'Active rule: "{active_rule.name}" '
+                    f"layout={target_layout} variant={target_variant} "
+                    f"matched={', '.join(device.name for device in active_matches)}"
+                )
+            else:
+                print(f"Active rule: default layout={target_layout} variant={target_variant}")
+
+            print(f"Backend: {backend.name}")
+            print(f"Current layout: {backend.current_layout()}")
+            print("")
+            previous = state
+
+        if args.once:
+            return 0
+
+        time.sleep(args.interval)
+
+
 def cmd_completion_zsh(_args: argparse.Namespace) -> int:
     completion_path = (
         Path(__file__).resolve().parents[2]
@@ -405,6 +495,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_assign.add_argument("layout")
     p_assign.add_argument("variant", nargs="?", default="")
     p_assign.add_argument("--match", choices=MATCH_CHOICES, default="exact")
+    p_assign.add_argument("--vendor-id", help="USB/input vendor id, for example 05ac")
+    p_assign.add_argument("--product-id", help="USB/input product id, for example 024f")
     p_assign.set_defaults(func=cmd_assign)
 
     p_remove = sub.add_parser("remove", help="Remove a device rule")
@@ -434,6 +526,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_doctor = sub.add_parser("doctor", help="Run environment checks")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_watch = sub.add_parser("watch", help="Watch detected devices and active rule")
+    p_watch.add_argument("--interval", type=float, default=2.0)
+    p_watch.add_argument("--once", action="store_true")
+    p_watch.set_defaults(func=cmd_watch)
 
     p_completion = sub.add_parser("completion-zsh", help="Print zsh completion script")
     p_completion.set_defaults(func=cmd_completion_zsh)
