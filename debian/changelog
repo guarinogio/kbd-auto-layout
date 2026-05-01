@@ -1,3 +1,9 @@
+kbd-auto-layout (1.0.9) stable; urgency=medium
+
+  * Rebuild v1.0.8 improvements with corrected pyproject metadata.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 13:36:50 +0200
+
 kbd-auto-layout (1.0.8) stable; urgency=medium
 
   * Add configurable XKB apply retries and retry delay.
