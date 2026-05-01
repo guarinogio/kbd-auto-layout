@@ -23,8 +23,22 @@ def _handle_sighup(_signum, _frame) -> None:
     _reload_requested = True
 
 
+def rule_specificity(rule: DeviceRule) -> int:
+    if rule.vendor_id or rule.product_id:
+        return 300
+    if rule.match == "exact":
+        return 200
+    if rule.match == "contains":
+        return 100
+    return 0
+
+
 def sorted_rules(rules: list[DeviceRule]) -> list[DeviceRule]:
-    return sorted(rules, key=lambda rule: rule.priority, reverse=True)
+    return sorted(
+        rules,
+        key=lambda rule: (rule.priority, rule_specificity(rule)),
+        reverse=True,
+    )
 
 
 def find_active_rule() -> tuple[GeneralConfig, DeviceRule | None, list[KeyboardDevice]]:

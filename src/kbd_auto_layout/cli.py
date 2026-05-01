@@ -13,7 +13,7 @@ from kbd_auto_layout import __version__
 from kbd_auto_layout.backends import detect_backend
 from kbd_auto_layout.config import USER_CONFIG, init_user_config, load_config, save_user_config
 from kbd_auto_layout.events import event_monitor_available
-from kbd_auto_layout.daemon import find_active_rule, sorted_rules
+from kbd_auto_layout.daemon import find_active_rule, rule_specificity, sorted_rules
 from kbd_auto_layout.models import DeviceRule, KeyboardDevice
 from kbd_auto_layout.xinput import list_keyboard_devices, match_rule_devices, clear_device_cache
 from kbd_auto_layout.xkb import (
@@ -407,15 +407,31 @@ def _find_device_by_query(devices, query: str):
     return None
 
 
+def _matching_devices_by_query(devices, query: str):
+    query = query.lower()
+    return [device for device in devices if query in device.name.lower()]
+
+
 def cmd_use_current_keyboard(args: argparse.Namespace) -> int:
     clear_device_cache()
     devices = list_keyboard_devices()
 
     if args.device:
-        device = _find_device_by_query(devices, args.device)
-        if device is None:
-            print(f'Could not uniquely match device: "{args.device}"', file=sys.stderr)
+        matches = _matching_devices_by_query(devices, args.device)
+        if len(matches) == 1:
+            device = matches[0]
+        elif not matches:
+            print(f'No keyboard matched: "{args.device}"', file=sys.stderr)
+            print("Run: kbd-auto-layoutctl list", file=sys.stderr)
             return 1
+        else:
+            print(f'Ambiguous keyboard query: "{args.device}"', file=sys.stderr)
+            print("Matching keyboards:", file=sys.stderr)
+            for match in matches:
+                hardware = f" ({match.hardware_id})" if match.hardware_id else ""
+                print(f"  - {match.name}{hardware}", file=sys.stderr)
+            print("Use a more specific --device value or --interactive.", file=sys.stderr)
+            return 2
     elif args.interactive:
         device = _choose_device_interactively(devices)
         if device is None:
@@ -549,13 +565,31 @@ def cmd_explain(args: argparse.Namespace) -> int:
     for idx, rule in enumerate(sorted_rules(rules), start=1):
         matches = match_rule_devices(rule, general.device_cache_ttl)
         print(f"  {idx}. {rule.name}")
-        print(f"     priority={rule.priority} match={rule.match} layout={rule.layout} variant={rule.variant}")
+        print(
+            f"     priority={rule.priority} specificity={rule_specificity(rule)} "
+            f"match={rule.match} layout={rule.layout} variant={rule.variant}"
+        )
         if rule.vendor_id or rule.product_id:
             print(f"     hardware={rule.vendor_id}:{rule.product_id}")
         if matches:
             print(f"     result=MATCH ({', '.join(device.name for device in matches)})")
         else:
             print("     result=no match")
+
+    matched_rules = []
+    for rule in sorted_rules(rules):
+        matches_for_rule = match_rule_devices(rule, general.device_cache_ttl)
+        if matches_for_rule:
+            matched_rules.append(rule)
+
+    if len(matched_rules) > 1:
+        print()
+        print("Warning: multiple rules match. The first one wins:")
+        for rule in matched_rules:
+            print(
+                f"  - {rule.name} priority={rule.priority} "
+                f"specificity={rule_specificity(rule)} layout={rule.layout}"
+            )
 
     _general, active_rule, matches = find_active_rule()
     print()
@@ -565,6 +599,48 @@ def cmd_explain(args: argparse.Namespace) -> int:
     else:
         print(f"Active rule: default -> {general.default_layout} {general.default_variant}".strip())
     return 0
+
+
+def _run_systemctl_user(args: list[str]) -> int:
+    result = subprocess.run(
+        ["systemctl", "--user", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.stderr.strip():
+        print(result.stderr.strip(), file=sys.stderr)
+    return result.returncode
+
+
+def cmd_enable(_args: argparse.Namespace) -> int:
+    rc = _run_systemctl_user(["daemon-reload"])
+    if rc != 0:
+        return rc
+    rc = _run_systemctl_user(["enable", "--now", "kbd-auto-layout.service"])
+    if rc == 0:
+        print("kbd-auto-layout.service enabled and started.")
+    return rc
+
+
+def cmd_disable(_args: argparse.Namespace) -> int:
+    rc = _run_systemctl_user(["disable", "--now", "kbd-auto-layout.service"])
+    if rc == 0:
+        print("kbd-auto-layout.service stopped and disabled.")
+    return rc
+
+
+def cmd_restart(_args: argparse.Namespace) -> int:
+    rc = _run_systemctl_user(["daemon-reload"])
+    if rc != 0:
+        return rc
+    rc = _run_systemctl_user(["restart", "kbd-auto-layout.service"])
+    if rc == 0:
+        print("kbd-auto-layout.service restarted.")
+    return rc
 
 def cmd_reload(_args: argparse.Namespace) -> int:
     result = subprocess.run(
@@ -677,7 +753,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     detail = backend.name
     if backend.name == "wayland":
-        detail = "generic Wayland detected; partial support only"
+        detail = "generic Wayland detected; set backend=gnome-wayland for GNOME or use X11"
     if backend.name == "unsupported":
         detail = getattr(backend, "reason", "unsupported backend")
 
@@ -863,6 +939,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_explain = sub.add_parser("explain", help="Explain rule evaluation and active layout")
     p_explain.set_defaults(func=cmd_explain)
+
+    p_enable = sub.add_parser("enable", help="Enable and start the user service")
+    p_enable.set_defaults(func=cmd_enable)
+
+    p_disable = sub.add_parser("disable", help="Stop and disable the user service")
+    p_disable.set_defaults(func=cmd_disable)
+
+    p_restart = sub.add_parser("restart", help="Restart the user service")
+    p_restart.set_defaults(func=cmd_restart)
 
     p_reload = sub.add_parser("reload", help="Reload daemon config")
     p_reload.set_defaults(func=cmd_reload)

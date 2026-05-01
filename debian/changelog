@@ -1,3 +1,14 @@
+kbd-auto-layout (1.5.0) unstable; urgency=medium
+
+  * Add service lifecycle commands: enable, disable, restart.
+  * Improve use-current-keyboard selection and ambiguity messages.
+  * Add rule specificity scoring and ambiguity warnings.
+  * Improve explain output with rule scoring.
+  * Keep GNOME Wayland backend explicit and improve doctor guidance.
+  * Use Debian-compatible unstable distribution in changelog.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Fri, 01 May 2026 15:26:27 +0200
+
 kbd-auto-layout (1.4.0) stable; urgency=medium
 
   * Improve hardware ID detection using xinput and udevadm.
