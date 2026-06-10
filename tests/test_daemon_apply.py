@@ -1,7 +1,5 @@
 from kbd_auto_layout.daemon import apply_layout_verified, run_loop
 from kbd_auto_layout.models import GeneralConfig
-import threading
-import time
 
 
 class FakeBackend:
