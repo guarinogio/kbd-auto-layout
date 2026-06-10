@@ -137,6 +137,7 @@ def parse_gnome_sources(value: str) -> tuple[str, str]:
 
 
 def detect_backend(configured_backend: str = "auto") -> KeyboardBackend:
+    """Auto-detect the keyboard backend (X11, Wayland+GNOME, Wayland, or unsupported)."""
     configured_backend = (configured_backend or "auto").lower()
     session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
     desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()

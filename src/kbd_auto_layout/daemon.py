@@ -42,6 +42,11 @@ def sorted_rules(rules: list[DeviceRule]) -> list[DeviceRule]:
 
 
 def find_active_rule() -> tuple[GeneralConfig, DeviceRule | None, list[KeyboardDevice]]:
+    """Load config, enumerate devices, and return the highest-priority matching rule.
+
+    Returns (general_config, active_rule_or_None, matched_devices).
+    If no device rule matches, active_rule is None and defaults apply.
+    """
     general, rules, _ = load_config()
     for rule in sorted_rules(rules):
         matches = match_rule_devices(rule, general.device_cache_ttl)
@@ -156,77 +161,63 @@ def run_loop() -> None:
 
     try:
         while True:
-            if _reload_requested:
-                log.info("Reloading configuration after SIGHUP")
-                _reload_requested = False
-                last_state = None
-                clear_device_cache()
+            try:
+                if _reload_requested:
+                    log.info("Reloading configuration after SIGHUP")
+                    _reload_requested = False
+                    last_state = None
+                    clear_device_cache()
 
-            general, rule, matches = find_active_rule()
-            backend = detect_backend(general.backend)
+                general, rule, matches = find_active_rule()
+                backend = detect_backend(general.backend)
 
-            if rule is not None:
-                state = (
-                    rule.layout,
-                    rule.variant,
-                    rule.priority,
-                    rule.match,
-                    _device_state(matches),
-                )
-                if state != last_state or not backend.layout_matches(rule.layout, rule.variant):
-                    log.info(
-                        "Active rule selected: name=%s priority=%s match=%s vid=%s pid=%s "
-                        "matched=%s",
-                        rule.name,
-                        rule.priority,
-                        rule.match,
-                        rule.vendor_id,
-                        rule.product_id,
-                        _device_names(matches),
-                    )
-                    if apply_layout_verified(
+                if rule is not None:
+                    state = (
                         rule.layout,
                         rule.variant,
-                        f"rule {rule.name}",
-                        general,
-                    ):
+                        rule.priority,
+                        rule.match,
+                        _device_state(matches),
+                    )
+                    if state != last_state or not backend.layout_matches(rule.layout, rule.variant):
                         log.info(
-                            "Applied device rule: pattern=%s priority=%s match=%s vid=%s pid=%s "
-                            "layout=%s variant=%s matched=%s",
-                            rule.name,
-                            rule.priority,
-                            rule.match,
-                            rule.vendor_id,
-                            rule.product_id,
-                            rule.layout,
-                            rule.variant,
-                            _device_names(matches),
+                            "Active rule selected: name=%s priority=%s match=%s vid=%s pid=%s "
+                            "matched=%s",
+                            rule.name, rule.priority, rule.match,
+                            rule.vendor_id, rule.product_id, _device_names(matches),
                         )
-                        last_state = state
-                    else:
-                        last_state = None
-            else:
-                state = (general.default_layout, general.default_variant, 0, "default", ())
-                if state != last_state or not backend.layout_matches(
-                    general.default_layout,
-                    general.default_variant,
-                ):
-                    if apply_layout_verified(
-                        general.default_layout,
-                        general.default_variant,
-                        "default layout",
-                        general,
+                        if apply_layout_verified(rule.layout, rule.variant, f"rule {rule.name}", general):
+                            log.info(
+                                "Applied device rule: pattern=%s priority=%s match=%s vid=%s pid=%s "
+                                "layout=%s variant=%s matched=%s",
+                                rule.name, rule.priority, rule.match,
+                                rule.vendor_id, rule.product_id,
+                                rule.layout, rule.variant, _device_names(matches),
+                            )
+                            last_state = state
+                        else:
+                            last_state = None
+                else:
+                    state = (general.default_layout, general.default_variant, 0, "default", ())
+                    if state != last_state or not backend.layout_matches(
+                        general.default_layout, general.default_variant,
                     ):
-                        log.info(
-                            "Applied default layout: %s %s",
-                            general.default_layout,
-                            general.default_variant,
-                        )
-                        last_state = state
-                    else:
-                        last_state = None
+                        if apply_layout_verified(
+                            general.default_layout, general.default_variant,
+                            "default layout", general,
+                        ):
+                            log.info(
+                                "Applied default layout: %s %s",
+                                general.default_layout, general.default_variant,
+                            )
+                            last_state = state
+                        else:
+                            last_state = None
 
-            _wait_for_next_check(general, monitor)
+                _wait_for_next_check(general, monitor)
+            except Exception:
+                log.exception("Daemon loop error — retrying in %ss", general.poll_interval)
+                time.sleep(general.poll_interval)
     finally:
         monitor.stop()
 

@@ -44,6 +44,7 @@ def default_config_parser() -> configparser.ConfigParser:
 
 
 def load_config() -> tuple[GeneralConfig, list[DeviceRule], list[Path]]:
+    """Load configuration from all config files. Returns (general, rules, files_read)."""
     parser = configparser.ConfigParser()
     files_read = parser.read([str(SYSTEM_CONFIG), str(USER_CONFIG)])
 

@@ -827,7 +827,7 @@ def cmd_reload(_args: argparse.Namespace) -> int:
 
 def cmd_edit(_args: argparse.Namespace) -> int:
     USER_CONFIG.parent.mkdir(parents=True, exist_ok=True)
-    editor = os.environ.get("EDITOR") or "code"
+    editor = os.environ.get("EDITOR") or "sensible-editor"
     subprocess.run([editor, str(USER_CONFIG)], check=False, timeout=10)
     return 0
 

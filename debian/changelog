@@ -1,4 +1,4 @@
-kbd-auto-layout (1.6.1) noble; urgency=medium
+kbd-auto-layout (1.6.1) unstable; urgency=medium
 
   * Use Ubuntu Noble distribution in Debian changelog for clean lintian builds.
 

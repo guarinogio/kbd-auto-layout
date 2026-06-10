@@ -1,7 +1,7 @@
 Source: kbd-auto-layout
 Section: utils
 Priority: optional
-Maintainer: Gio Guarino <gio@example.com>
+Maintainer: Giovanni Guarino <gioguarino@gmail.com>
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-python3,

@@ -8,8 +8,6 @@ Type=simple
 ExecStart=/usr/bin/kbd-auto-layoutd
 Restart=always
 RestartSec=2
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=%h/.Xauthority
 
 [Install]
 WantedBy=default.target

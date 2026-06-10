@@ -141,6 +141,7 @@ def _device_product_ids(device_id: str) -> tuple[str, str]:
 
 
 def list_keyboard_devices() -> list[KeyboardDevice]:
+    """Enumerate all XInput keyboard devices with their hardware IDs. Bluetooth devices may have empty vendor/product IDs."""
     result = subprocess.run(
         ["xinput", "list", "--long"],
         capture_output=True,
@@ -204,6 +205,7 @@ def match_device_names(pattern: str, match_mode: str) -> list[str]:
 
 
 def match_rule_devices(rule: DeviceRule, cache_ttl: float = 2.0) -> list[KeyboardDevice]:
+    """Match a rule against connected devices. Returns list of matching KeyboardDevice.""" 
     devices = list_keyboard_devices_cached(cache_ttl)
 
     if rule.vendor_id or rule.product_id:
