@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+- Daemon loop now catches all exceptions instead of crashing
+- Remove hardcoded DISPLAY=:0 from systemd service
+- Fix editor fallback: `code` → `sensible-editor` (Debian alternatives)
+- Add `--version` flag to daemon
+- CLI: suggest-rule omits `--hardware` for Bluetooth devices
+- CI: test on Python 3.10, 3.11, 3.12, 3.13
+- CI: add lintian and mypy checks
+- Add docstrings, classifiers, ARCHITECTURE.md
+- Fix man page version strings
+- Debian/Ubuntu cross-compatible packaging
+
+## 1.6.1
+- Update Debian packaging for distribution compatibility
+- Example config includes all available fields
+- Improved Bluetooth device detection and matching docs
+
 ## 1.0.5
 - Automated GitHub Release publishing
 - Automated APT repository publishing

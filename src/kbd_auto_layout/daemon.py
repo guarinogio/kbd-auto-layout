@@ -226,6 +226,7 @@ def run_loop() -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="kbd-auto-layoutd")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--version", action="version", version="kbd-auto-layoutd 1.6.1")
     return parser
 
 

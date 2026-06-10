@@ -1,3 +1,17 @@
+kbd-auto-layout (1.6.2) unstable; urgency=medium
+
+  * Daemon loop catches all exceptions instead of crashing on xinput failure.
+  * Remove hardcoded DISPLAY=:0 and XAUTHORITY from systemd service.
+  * Fix editor fallback: code → sensible-editor (Debian alternatives).
+  * Add --version flag to daemon.
+  * Add docstrings to public functions.
+  * Add tests for Bluetooth device matching and daemon crash recovery.
+  * Update CI matrix for Python 3.10–3.13 with lintian and mypy.
+  * Improve Bluetooth device matching documentation.
+  * Fix maintainer email in Debian control file.
+
+ -- Giovanni Guarino <gioguarino@gmail.com>  Wed, 11 Jun 2026 00:00:00 +0200
+
 kbd-auto-layout (1.6.1) unstable; urgency=medium
 
   * Use Ubuntu Noble distribution in Debian changelog for clean lintian builds.
