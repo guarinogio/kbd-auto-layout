@@ -1,5 +1,7 @@
-from kbd_auto_layout.daemon import apply_layout_verified
+from kbd_auto_layout.daemon import apply_layout_verified, run_loop
 from kbd_auto_layout.models import GeneralConfig
+import threading
+import time
 
 
 class FakeBackend:
@@ -46,3 +48,26 @@ def test_apply_layout_verified_returns_false_after_retries(monkeypatch):
 
     assert not apply_layout_verified("us", "", "test", general)
     assert backend.set_calls == 3
+
+
+def test_daemon_recovers_from_find_active_rule_error(monkeypatch):
+    """Daemon should not crash when device enumeration fails."""
+    call_count = [0]
+
+    def failing_find():
+        call_count[0] += 1
+        if call_count[0] <= 2:
+            raise OSError("xinput failure simulation")
+        # After 2 failures, return valid data so daemon exits cleanly
+        raise SystemExit(0)
+
+    monkeypatch.setattr("kbd_auto_layout.daemon.find_active_rule", failing_find)
+    monkeypatch.setattr("kbd_auto_layout.daemon.signal.signal", lambda *a: None)
+
+    try:
+        run_loop()
+    except SystemExit:
+        pass
+
+    # Should have retried at least twice without crashing
+    assert call_count[0] >= 2

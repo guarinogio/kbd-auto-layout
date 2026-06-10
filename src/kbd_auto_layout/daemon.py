@@ -216,8 +216,9 @@ def run_loop() -> None:
 
                 _wait_for_next_check(general, monitor)
             except Exception:
-                log.exception("Daemon loop error — retrying in %ss", general.poll_interval)
-                time.sleep(general.poll_interval)
+                interval = getattr(locals().get('general', None), 'poll_interval', 5)
+                log.exception("Daemon loop error — retrying in %ss", interval)
+                time.sleep(interval)
     finally:
         monitor.stop()
 
